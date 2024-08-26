@@ -10,7 +10,7 @@ import CameraControl from "./control/camera/cameraControl";
 import ModelControl from "./control/model/modelControl";
 import EnvironmentControl from "./control/environment/environmentControl";
 import AudioControl from "./control/audio/audioControl";
-import Spinner from "@/src/assets/icons/ic_spinner.svg";
+import Spinner from "../assets/icons/ic_spinner.svg";
 import type { ModelViewerProps } from "./types";
 import { GLTFLoader } from "three/examples/jsm/Addons.js";
 
