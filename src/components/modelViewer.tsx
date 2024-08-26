@@ -179,4 +179,5 @@ const ModelViewer = React.forwardRef<HTMLCanvasElement, ModelViewerProps>(
   }
 );
 
+ModelViewer.displayName = "ModelViewer";
 export default ModelViewer;
