@@ -27,7 +27,7 @@ const ModelViewer = React.forwardRef<HTMLCanvasElement, ModelViewerProps>(
       const { actions, mixer } = useAnimations(animations, scene);
       const { scene: defaultScene, camera: defaultCamera, gl } = useThree();
 
-      const coreNodeRef = useRef<Object3D>(nodes[Object.keys(nodes).find((value) => value.includes("Hips"))!]);
+      const coreNodeRef = useRef<Object3D | undefined>(Object.entries(nodes).find((key) => ["Hips", "Pelvis"].some((coreKey) => key.includes(coreKey)))?.[1]);
       const orbitControlRef = useRef<OrbitControlsImpl>(null);
       const skyRef = useRef<SkyImpl>(null);
       const groundRef = useRef<MeshStandardMaterial>(null);
