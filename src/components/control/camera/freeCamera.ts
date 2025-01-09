@@ -1,45 +1,42 @@
-import { Camera, Object3D, Vector3 } from 'three'
-import { CameraControlParams } from './types'
-import { OrbitControls } from 'three-stdlib'
+import { Camera, Object3D, Vector3 } from "three";
+import { CameraControlParams } from "./types";
+import { OrbitControls } from "three-stdlib";
 
 export default class FreeCamera {
-  defaultPosition: Vector3
-  coreNode: Object3D
-  camera: Camera
-  orbitControls: OrbitControls | null
+  defaultPosition: Vector3;
+  coreNode?: Object3D;
+  camera: Camera;
+  orbitControls: OrbitControls | null;
 
   constructor({ coreNode, camera, orbitControl, option }: CameraControlParams) {
-    this.defaultPosition = option?.defaultPosition ?? new Vector3(0, 0, 3)
-    this.coreNode = coreNode
-    this.camera = camera
-    this.orbitControls = orbitControl
+    this.defaultPosition = option?.defaultPosition ?? new Vector3(0, 0, 3);
+    this.coreNode = coreNode;
+    this.camera = camera;
+    this.orbitControls = orbitControl;
   }
 
   initialize = () => {
-    this.resetPosition()
-  }
+    this.resetPosition();
+  };
 
   resetPosition = () => {
-    const modelWorldPosition = new Vector3()
-    this.coreNode.getWorldPosition(modelWorldPosition)
+    if (!this.coreNode) {
+      return;
+    }
 
-    this.camera.position.copy(modelWorldPosition)
-    this.camera.position.add(this.defaultPosition)
+    const modelWorldPosition = new Vector3();
+    this.coreNode.getWorldPosition(modelWorldPosition);
+
+    this.camera.position.copy(modelWorldPosition);
+    this.camera.position.add(this.defaultPosition);
 
     if (this.orbitControls) {
-      this.orbitControls.target = modelWorldPosition
+      this.orbitControls.target = modelWorldPosition;
     }
-  }
+  };
 
-  dispose = () => {}
-  updateOnFrame = () => {}
-  onStartControl = () => {}
-  onEndControl = () => {}
-
-  private getModelWorldPosition = () => {
-    const modelWorldPosition = new Vector3()
-    this.coreNode.getWorldPosition(modelWorldPosition)
-
-    return modelWorldPosition
-  }
+  dispose = () => {};
+  updateOnFrame = () => {};
+  onStartControl = () => {};
+  onEndControl = () => {};
 }
