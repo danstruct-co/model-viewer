@@ -12,7 +12,7 @@ import EnvironmentControl from "./control/environment/environmentControl";
 import AudioControl from "./control/audio/audioControl";
 import Spinner from "../assets/icons/ic_spinner.svg";
 import type { ModelViewerProps } from "./types";
-import { GLTFLoader } from "three/examples/jsm/Addons.js";
+import { DRACOLoader, GLTFLoader } from "three/examples/jsm/Addons.js";
 import React from "react";
 
 const ModelViewer = React.forwardRef<HTMLCanvasElement, ModelViewerProps>(
@@ -23,7 +23,16 @@ const ModelViewer = React.forwardRef<HTMLCanvasElement, ModelViewerProps>(
     const [progress, setProgress] = useState(0);
 
     const Model = () => {
-      const { nodes, scene, animations } = useLoader(GLTFLoader, url, undefined, ({ loaded, total }) => setProgress((loaded / total) * 100));
+      const { nodes, scene, animations } = useLoader(
+        GLTFLoader,
+        url,
+        (loader) => {
+          const draco = new DRACOLoader();
+          draco.setDecoderPath("https://www.gstatic.com/draco/v1/decoders/");
+          loader.setDRACOLoader(draco);
+        },
+        ({ loaded, total }) => setProgress((loaded / total) * 100)
+      );
       const { actions, mixer } = useAnimations(animations, scene);
       const { scene: defaultScene, camera: defaultCamera, gl } = useThree();
 
