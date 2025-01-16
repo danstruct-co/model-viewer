@@ -10,10 +10,12 @@ import CameraControl from "./control/camera/cameraControl";
 import ModelControl from "./control/model/modelControl";
 import EnvironmentControl from "./control/environment/environmentControl";
 import AudioControl from "./control/audio/audioControl";
-import Spinner from "../assets/icons/ic_spinner.svg";
 import type { ModelViewerProps } from "./types";
 import { DRACOLoader, GLTFLoader } from "three/examples/jsm/Addons.js";
 import React from "react";
+import Loading from "./loading";
+import { ErrorBoundary } from "react-error-boundary";
+import Error from "./error";
 
 const ModelViewer = React.forwardRef<HTMLCanvasElement, ModelViewerProps>(
   ({ url, camera: cameraSetting, animation: animationSetting, model: modelSetting, environment: environmentSetting, audio: audioSetting, onLoaded, fallback, onClick, className }, ref) => {
@@ -163,22 +165,13 @@ const ModelViewer = React.forwardRef<HTMLCanvasElement, ModelViewerProps>(
 
     return (
       <div className={className} onClick={onClick}>
-        <Suspense
-          fallback={
-            fallback?.(progress) ?? (
-              <div className="relative w-full h-full grid place-items-center">
-                <div className="w-fit h-fit relative">
-                  <Spinner className="animate-spin" />
-                  <div className="absolute top-1/2 -translate-y-1/2 left-1/2 -translate-x-1/2">{progress.toFixed()}%</div>
-                </div>
-              </div>
-            )
-          }
-        >
-          <Canvas ref={ref} shadows>
-            {model}
-            <color ref={backgroundColorRef} attach="background" />
-          </Canvas>
+        <Suspense fallback={fallback?.(progress) ?? <Loading progress={progress} />}>
+          <ErrorBoundary resetKeys={[url]} fallbackRender={({ error }) => <Error error={error} />}>
+            <Canvas ref={ref} shadows>
+              {model}
+              <color ref={backgroundColorRef} attach="background" />
+            </Canvas>
+          </ErrorBoundary>
         </Suspense>
         <audio ref={audioRef}>
           <source src={audioSetting?.url}></source>
