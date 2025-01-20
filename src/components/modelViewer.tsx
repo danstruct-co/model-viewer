@@ -80,6 +80,7 @@ const ModelViewer = React.forwardRef<HTMLCanvasElement, ModelViewerProps>(
           scene,
           nodes,
           coreNode: coreNodeRef.current,
+          materialType: modelSetting?.materialType,
           option: {
             defaultFixed: modelSetting?.defaultFixed,
             defaultMirrorMode: modelSetting?.defaultMirrorMode,

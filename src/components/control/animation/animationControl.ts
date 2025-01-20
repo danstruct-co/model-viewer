@@ -82,6 +82,10 @@ export default class AnimationControl {
   }
 
   getCurrentTime() {
+    if (!this.actions.length) {
+      return 0;
+    }
+
     return this.actions[0].time;
   }
 
