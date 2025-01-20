@@ -1,6 +1,6 @@
 import { MeshStandardMaterial } from "three";
 import type { MaterialType } from "./types";
-import { removeNullOrUndefined } from "@/src/utils";
+import { removeNullOrUndefined } from "../../../utils";
 
 export const materials = (origin: MeshStandardMaterial): Record<MaterialType, MeshStandardMaterial> => ({
   DEFAULT: origin,
