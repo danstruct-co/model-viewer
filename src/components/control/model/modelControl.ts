@@ -1,20 +1,28 @@
-import { Object3D, Vector3 } from "three";
-import { ModelControlParams } from "./types";
+import { MeshStandardMaterial, Object3D, Vector3, type Mesh } from "three";
+import { ModelControlParams, type MaterialType } from "./types";
+import { materials } from "./mapper";
 
 export default class ModelControl {
   scene: Object3D;
   model: Object3D;
   coreNode?: Object3D;
+  materialType?: MaterialType;
   isMirror: boolean = false;
   isFixed: boolean = false;
 
-  constructor({ scene, nodes, coreNode, option }: ModelControlParams) {
+  constructor({ scene, nodes, coreNode, materialType, option }: ModelControlParams) {
     this.scene = scene;
     this.model = scene.children[0];
     this.coreNode = coreNode;
 
-    Object.keys(nodes).forEach((key) => {
-      nodes[key].frustumCulled = false;
+    Object.values(nodes).forEach((node) => {
+      node.frustumCulled = false;
+      const mesh = node as Mesh;
+      if (!mesh.isMesh || !(mesh.material instanceof MeshStandardMaterial)) {
+        return;
+      }
+
+      mesh.material = materials(mesh.material)[materialType ?? "DEFAULT"];
     });
 
     if (option?.defaultMirrorMode) {
