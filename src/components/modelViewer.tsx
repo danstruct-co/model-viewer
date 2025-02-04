@@ -1,79 +1,98 @@
-"use client";
+'use client'
 
-import { ContactShadows, Environment, OrbitControls, Sky, useAnimations } from "@react-three/drei";
-import { Canvas, useFrame, useLoader, useThree } from "@react-three/fiber";
-import { Suspense, useEffect, useMemo, useRef, useState } from "react";
-import { Color, MeshStandardMaterial, Object3D } from "three";
-import AnimationControl from "./control/animation/animationControl";
-import { OrbitControls as OrbitControlsImpl, Sky as SkyImpl } from "three-stdlib";
-import CameraControl from "./control/camera/cameraControl";
-import ModelControl from "./control/model/modelControl";
-import EnvironmentControl from "./control/environment/environmentControl";
-import AudioControl from "./control/audio/audioControl";
-import type { ModelViewerProps } from "./types";
-import { DRACOLoader, GLTFLoader } from "three/examples/jsm/Addons.js";
-import React from "react";
-import Loading from "./loading";
-import { ErrorBoundary } from "react-error-boundary";
-import Error from "./error";
+import { ContactShadows, Environment, OrbitControls, Sky, useAnimations } from '@react-three/drei'
+import { Canvas, useFrame, useLoader, useThree } from '@react-three/fiber'
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react'
+import { Color, MeshStandardMaterial, Object3D } from 'three'
+import AnimationControl from './control/animation/animationControl'
+import { OrbitControls as OrbitControlsImpl, Sky as SkyImpl } from 'three-stdlib'
+import CameraControl from './control/camera/cameraControl'
+import ModelControl from './control/model/modelControl'
+import EnvironmentControl from './control/environment/environmentControl'
+import AudioControl from './control/audio/audioControl'
+import type { ModelViewerProps } from './types'
+import { DRACOLoader, GLTFLoader } from 'three/examples/jsm/Addons.js'
+import React from 'react'
+import Loading from './loading'
+import { ErrorBoundary } from 'react-error-boundary'
+import Error from './error'
 
 const ModelViewer = React.forwardRef<HTMLCanvasElement, ModelViewerProps>(
-  ({ url, camera: cameraSetting, animation: animationSetting, model: modelSetting, environment: environmentSetting, audio: audioSetting, onLoaded, fallback, onClick, className }, ref) => {
-    const backgroundColorRef = useRef<Color>(null);
-    const audioRef = useRef<HTMLAudioElement>(null);
+  (
+    {
+      url,
+      camera: cameraSetting,
+      animation: animationSetting,
+      model: modelSetting,
+      environment: environmentSetting,
+      audio: audioSetting,
+      onLoaded,
+      onDispose,
+      fallback,
+      onClick,
+      className,
+    },
+    ref
+  ) => {
+    const backgroundColorRef = useRef<Color>(null)
+    const audioRef = useRef<HTMLAudioElement>(null)
 
-    const [progress, setProgress] = useState(0);
+    const [progress, setProgress] = useState(0)
 
     const Model = () => {
       const { nodes, scene, animations } = useLoader(
         GLTFLoader,
         url,
         (loader) => {
-          const draco = new DRACOLoader();
-          draco.setDecoderPath("https://www.gstatic.com/draco/v1/decoders/");
-          loader.setDRACOLoader(draco);
+          const draco = new DRACOLoader()
+          draco.setDecoderPath('https://www.gstatic.com/draco/v1/decoders/')
+          loader.setDRACOLoader(draco)
         },
         ({ loaded, total }) => setProgress((loaded / total) * 100)
-      );
-      const { actions, mixer } = useAnimations(animations, scene);
-      const { scene: defaultScene, camera: defaultCamera, gl } = useThree();
+      )
+      const { actions, mixer } = useAnimations(animations, scene)
+      const { scene: defaultScene, camera: defaultCamera, gl } = useThree()
 
-      const coreNodeRef = useRef<Object3D | undefined>(Object.entries(nodes).find(([key]) => ["hips", "pelvis"].some((coreKey) => key.toLowerCase().includes(coreKey)))?.[1]);
-      const orbitControlRef = useRef<OrbitControlsImpl>(null);
-      const skyRef = useRef<SkyImpl>(null);
-      const groundRef = useRef<MeshStandardMaterial>(null);
+      const coreNodeRef = useRef<Object3D | undefined>(
+        Object.entries(nodes).find(([key]) => ['hips', 'pelvis'].some((coreKey) => key.toLowerCase().includes(coreKey)))?.[1]
+      )
+      const orbitControlRef = useRef<OrbitControlsImpl>(null)
+      const skyRef = useRef<SkyImpl>(null)
+      const groundRef = useRef<MeshStandardMaterial>(null)
 
-      const modelControlRef = useRef<ModelControl>();
-      const animationControlRef = useRef<AnimationControl>();
-      const cameraControlRef = useRef<CameraControl>();
-      const environmentControlRef = useRef<EnvironmentControl>();
-      const audioControlRef = useRef<AudioControl>();
+      const modelControlRef = useRef<ModelControl>()
+      const animationControlRef = useRef<AnimationControl>()
+      const cameraControlRef = useRef<CameraControl>()
+      const environmentControlRef = useRef<EnvironmentControl>()
+      const audioControlRef = useRef<AudioControl>()
 
       useEffect(() => {
-        const modelControl = initializeModelControl();
-        const animationControl = initializeAnimationControl();
-        const cameraControl = initializeCameraControl(animationControl);
-        const environmentControl = initializeEnvironmentControl();
-        const audioControl = initializeAudioControl(animationControl);
+        const modelControl = initializeModelControl()
+        const animationControl = initializeAnimationControl()
+        const cameraControl = initializeCameraControl(animationControl)
+        const environmentControl = initializeEnvironmentControl()
+        const audioControl = initializeAudioControl(animationControl)
 
-        onLoaded?.({
+        const modelViewerControl = {
           modelControl,
           animationControl,
           cameraControl,
           environmentControl,
           audioControl,
-        });
+        }
+        onLoaded?.(modelViewerControl)
 
         return () => {
-          gl.dispose();
-        };
-      }, []);
+          onDispose?.(modelViewerControl)
+          gl.dispose()
+        }
+      }, [])
 
       useFrame(() => {
-        modelControlRef.current?.updateOnFrame();
-        cameraControlRef.current?.updateOnFrame();
-        animationControlRef.current?.updateOnFrame();
-      });
+        modelControlRef.current?.updateOnFrame()
+        cameraControlRef.current?.updateOnFrame()
+        animationControlRef.current?.updateOnFrame()
+      })
 
       const initializeModelControl = () => {
         modelControlRef.current = new ModelControl({
@@ -85,10 +104,10 @@ const ModelViewer = React.forwardRef<HTMLCanvasElement, ModelViewerProps>(
             defaultFixed: modelSetting?.defaultFixed,
             defaultMirrorMode: modelSetting?.defaultMirrorMode,
           },
-        });
+        })
 
-        return modelControlRef.current!;
-      };
+        return modelControlRef.current!
+      }
 
       const initializeAnimationControl = () => {
         animationControlRef.current = new AnimationControl({
@@ -98,10 +117,10 @@ const ModelViewer = React.forwardRef<HTMLCanvasElement, ModelViewerProps>(
             autoplay: animationSetting?.autoplay,
             defaultTimeScale: animationSetting?.defaultTimeScale,
           },
-        });
+        })
 
-        return animationControlRef.current!;
-      };
+        return animationControlRef.current!
+      }
 
       const initializeCameraControl = (animationControl: AnimationControl) => {
         cameraControlRef.current = new CameraControl({
@@ -115,10 +134,10 @@ const ModelViewer = React.forwardRef<HTMLCanvasElement, ModelViewerProps>(
             defaultPosition: cameraSetting?.defaultPosition,
             disableZoom: cameraSetting?.disableZoom,
           },
-        });
+        })
 
-        return cameraControlRef.current!;
-      };
+        return cameraControlRef.current!
+      }
 
       const initializeEnvironmentControl = () => {
         environmentControlRef.current = new EnvironmentControl({
@@ -130,20 +149,20 @@ const ModelViewer = React.forwardRef<HTMLCanvasElement, ModelViewerProps>(
             defaultBackground: environmentSetting?.defaultBackground,
             defaultGridActive: environmentSetting?.defaultActiveGrid,
           },
-        });
+        })
 
-        return environmentControlRef.current;
-      };
+        return environmentControlRef.current
+      }
 
       const initializeAudioControl = (animationControl: AnimationControl) => {
         audioControlRef.current = new AudioControl({
           audio: audioSetting?.url ? audioRef.current : null,
           animationControl,
           option: { defaultVolume: audioSetting?.defaultVolume },
-        });
+        })
 
-        return audioControlRef.current!;
-      };
+        return audioControlRef.current!
+      }
 
       return (
         <group>
@@ -159,10 +178,10 @@ const ModelViewer = React.forwardRef<HTMLCanvasElement, ModelViewerProps>(
           <ambientLight position={[5, 5, 4]} intensity={0.5} />
           <Sky ref={skyRef} sunPosition={[100, 110, 50]} />
         </group>
-      );
-    };
+      )
+    }
 
-    const model = useMemo(() => <Model />, [url]);
+    const model = useMemo(() => <Model />, [url])
 
     return (
       <div className={className} onClick={onClick}>
@@ -178,9 +197,9 @@ const ModelViewer = React.forwardRef<HTMLCanvasElement, ModelViewerProps>(
           <source src={audioSetting?.url}></source>
         </audio>
       </div>
-    );
+    )
   }
-);
+)
 
-ModelViewer.displayName = "ModelViewer";
-export default ModelViewer;
+ModelViewer.displayName = 'ModelViewer'
+export default ModelViewer
