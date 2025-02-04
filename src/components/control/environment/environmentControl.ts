@@ -1,57 +1,70 @@
-import { Color, GridHelper, Scene, type MeshStandardMaterial } from "three";
-import { BackgroundType, EnvironmentControlParams } from "./types";
-import { Sky } from "three-stdlib";
-import { backgroundSettings } from "./mapper";
+import { Color, GridHelper, Scene, type MeshStandardMaterial } from 'three'
+import { BackgroundType, EnvironmentControlParams } from './types'
+import { Sky } from 'three-stdlib'
+import { backgroundSettings } from './mapper'
 
 export default class EnvironmentControl {
-  private scene: Scene;
-  private backgroundColor: Color;
-  private sky: Sky;
-  private ground: MeshStandardMaterial;
-  private gridHelper?: GridHelper;
-  private currentType: BackgroundType = "default";
+  private scene: Scene
+  private backgroundColor: Color
+  private sky: Sky
+  private ground: MeshStandardMaterial
+  private gridHelper?: GridHelper
+  private currentType: BackgroundType = 'default'
+  private isActiveGrid: boolean = false
 
   constructor({ scene, color, sky, ground, option }: EnvironmentControlParams) {
-    this.scene = scene;
-    this.backgroundColor = color;
-    this.sky = sky;
-    this.ground = ground;
+    this.scene = scene
+    this.backgroundColor = color
+    this.sky = sky
+    this.ground = ground
 
-    this.setBackground(option?.defaultBackground ?? "default");
-    this.setGridActive(!!option?.defaultGridActive);
+    this.setBackground(option?.defaultBackground ?? 'default')
+    this.setGridActive(!!option?.defaultGridActive)
   }
 
   setBackground(type: BackgroundType) {
-    const { backgroundColor, groundColor, hasSky } = backgroundSettings[type];
+    const { backgroundColor, groundColor, hasSky } = backgroundSettings[type]
 
-    this.backgroundColor.set(backgroundColor);
-    this.ground.color.set(groundColor);
-    this.sky.visible = hasSky;
+    this.backgroundColor.set(backgroundColor)
+    this.ground.color.set(groundColor)
+    this.sky.visible = hasSky
 
-    this.currentType = type;
+    this.currentType = type
 
-    this.setGridActive(!!this.gridHelper);
+    this.setGridActive(!!this.gridHelper)
   }
 
   setGridActive(isActive: boolean) {
-    this.removeGrid();
+    this.removeGrid()
 
     if (!isActive) {
-      return;
+      return
     }
 
-    this.addGrid();
+    this.addGrid()
+  }
+
+  get backgroundType() {
+    return this.currentType
+  }
+
+  get gridActive() {
+    return this.isActiveGrid
   }
 
   private addGrid() {
-    const { gridColor } = backgroundSettings[this.currentType];
-    this.gridHelper = new GridHelper(20, 20, gridColor, gridColor);
-    this.gridHelper.position.setY(-0.01);
-    this.scene.add(this.gridHelper);
+    const { gridColor } = backgroundSettings[this.currentType]
+    this.gridHelper = new GridHelper(20, 20, gridColor, gridColor)
+    this.gridHelper.position.setY(-0.01)
+    this.scene.add(this.gridHelper)
+
+    this.isActiveGrid = true
   }
 
   private removeGrid() {
-    const gridHelpers = this.scene.children.filter((value) => value instanceof GridHelper);
-    gridHelpers.forEach((value) => this.scene.remove(value));
+    const gridHelpers = this.scene.children.filter((value) => value instanceof GridHelper)
+    gridHelpers.forEach((value) => this.scene.remove(value))
+
+    this.isActiveGrid = false
   }
 }

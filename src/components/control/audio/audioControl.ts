@@ -91,4 +91,8 @@ export default class AudioControl {
 
     this.audio.volume = value
   }
+
+  get volume() {
+    return this.audio?.volume
+  }
 }

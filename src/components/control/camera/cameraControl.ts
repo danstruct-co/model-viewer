@@ -4,6 +4,8 @@ import { CameraControlAction, CameraControlParams, CameraTarget, ControlMode } f
 export default class CameraControl {
   control?: CameraControlAction
   private params: CameraControlParams
+  private currentControlMode: ControlMode = 'rotate'
+  private currentTarget: CameraTarget = 'model'
 
   constructor(params: CameraControlParams) {
     this.params = params
@@ -27,6 +29,8 @@ export default class CameraControl {
     }
 
     this.params.orbitControl.mouseButtons = { LEFT: cameraControlMode[controlMode] }
+    this.currentControlMode = controlMode
+    console.log(this.currentControlMode)
   }
 
   setDisableZoom(value?: boolean) {
@@ -41,6 +45,7 @@ export default class CameraControl {
     this.control?.dispose()
     this.control = cameraTargets[type](this.params)
     this.control?.initialize()
+    this.currentTarget = type
   }
 
   resetPosition() {
@@ -49,5 +54,13 @@ export default class CameraControl {
 
   updateOnFrame() {
     this.control?.updateOnFrame()
+  }
+
+  get controlMode() {
+    return this.currentControlMode
+  }
+
+  get cameraTarget() {
+    return this.currentTarget
   }
 }
