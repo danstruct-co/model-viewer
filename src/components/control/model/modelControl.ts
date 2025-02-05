@@ -2,6 +2,7 @@ import { MeshStandardMaterial, Object3D, Vector3, type Mesh } from 'three'
 import { ModelControlParams, type MaterialType } from './types'
 import { materials } from './mapper'
 import type CoreNodeFinder from '../../../coreNodeFinder/coreNodeFinder'
+import { getCoreModels } from '../utils'
 
 export default class ModelControl {
   scene: Object3D
@@ -16,7 +17,7 @@ export default class ModelControl {
   constructor({ scene, coreNodeFinder, materialType, option }: ModelControlParams) {
     this.scene = scene
     this.coreNodeFinder = coreNodeFinder
-    this.models = scene.children.filter((child) => this.coreNodeFinder.find(child))
+    this.models = getCoreModels(scene.children, this.coreNodeFinder)
     this.materialType = materialType
     this.changeModel(0)
 
