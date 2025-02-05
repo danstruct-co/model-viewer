@@ -17,12 +17,12 @@ export default class CameraControl {
     this.coreNodeFinder = params.coreNodeFinder
     const { option, orbitControl } = params
 
+    this.models = params.scene.children.filter((child) => this.coreNodeFinder.find(child))
+    this.setCoreNode(0)
+
     this.setControlMode(option?.defaultControlMode ?? 'rotate')
     this.setDisableZoom(option?.disableZoom)
     this.setTargetType(option?.defaultTarget ?? 'model')
-
-    this.models = params.scene.children.filter((child) => this.coreNodeFinder.find(child))
-    this.setCoreNode(0)
 
     orbitControl?.addEventListener('start', () => {
       this.control?.onStartControl()
@@ -57,11 +57,15 @@ export default class CameraControl {
   }
 
   setCoreNode(index: number) {
-    if (index >= this.models.length || !this.control) {
+    if (index >= this.models.length) {
       return
     }
 
     this.coreNode = this.coreNodeFinder.find(this.models[index])
+
+    if (!this.control) {
+      return
+    }
     this.control.coreNode = this.coreNode
   }
 
