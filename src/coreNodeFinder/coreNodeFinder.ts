@@ -1,9 +1,9 @@
 import type { AnimationAction, Object3D } from 'three'
 import type { CoreNodeFinderParams } from './types'
+import { defaultCoreKeys, exceptCoreKeys } from './data'
 
 export default class CoreNodeFinder {
-  private coreKeys: string[] = ['hips', 'pelvis']
-  private exceptKeys: string[] = ['root']
+  private coreKeys: string[] = [...defaultCoreKeys]
 
   constructor({ nodes, actions }: CoreNodeFinderParams) {
     Object.entries(nodes).forEach(([key, node]) => (node.name = key))
@@ -14,7 +14,7 @@ export default class CoreNodeFinder {
     const clips = targetActions.map((action) => action.getClip())
     clips.forEach((clip) => {
       const key = clip.tracks
-        .filter((track) => this.exceptKeys.some((exceptKey) => !track.name.toLowerCase().includes(exceptKey)))
+        .filter((track) => exceptCoreKeys.some((exceptKey) => !track.name.toLowerCase().includes(exceptKey)))
         .at(0)
         ?.name.split('.')
         .at?.(0)
@@ -39,5 +39,12 @@ export default class CoreNodeFinder {
 
   private checkCoreNode(node: Object3D) {
     return this.coreKeys.some((coreKey) => node.name.toLowerCase().includes(coreKey))
+  }
+
+  hasDefaultCoreNode(object: Object3D) {
+    let hasCoreNode = false
+    object.traverse((node) => defaultCoreKeys.some((coreKey) => node.name.toLowerCase().includes(coreKey)) && (hasCoreNode = true))
+
+    return hasCoreNode
   }
 }

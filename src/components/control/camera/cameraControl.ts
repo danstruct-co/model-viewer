@@ -2,6 +2,7 @@ import type { Object3D } from 'three'
 import { cameraControlMode, cameraTargets } from './mapper'
 import { CameraControlAction, CameraControlParams, CameraTarget, ControlMode } from './types'
 import type CoreNodeFinder from '../../../coreNodeFinder/coreNodeFinder'
+import { getCoreModels } from '../utils'
 
 export default class CameraControl {
   control?: CameraControlAction
@@ -17,7 +18,7 @@ export default class CameraControl {
     this.coreNodeFinder = params.coreNodeFinder
     const { option, orbitControl } = params
 
-    this.models = params.scene.children.filter((child) => this.coreNodeFinder.find(child))
+    this.models = getCoreModels(params.scene.children, this.coreNodeFinder)
     this.setCoreNode(0)
 
     this.setControlMode(option?.defaultControlMode ?? 'rotate')
