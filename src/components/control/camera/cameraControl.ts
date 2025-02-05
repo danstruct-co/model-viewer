@@ -1,19 +1,28 @@
+import type { Object3D } from 'three'
 import { cameraControlMode, cameraTargets } from './mapper'
 import { CameraControlAction, CameraControlParams, CameraTarget, ControlMode } from './types'
+import type CoreNodeFinder from '../../../coreNodeFinder/coreNodeFinder'
 
 export default class CameraControl {
   control?: CameraControlAction
   private params: CameraControlParams
   private currentControlMode: ControlMode = 'rotate'
   private currentTarget: CameraTarget = 'model'
+  private models: Object3D[] = []
+  private coreNodeFinder: CoreNodeFinder
+  private coreNode?: Object3D
 
   constructor(params: CameraControlParams) {
     this.params = params
+    this.coreNodeFinder = params.coreNodeFinder
     const { option, orbitControl } = params
 
     this.setControlMode(option?.defaultControlMode ?? 'rotate')
     this.setDisableZoom(option?.disableZoom)
     this.setTargetType(option?.defaultTarget ?? 'model')
+
+    this.models = params.scene.children.filter((child) => this.coreNodeFinder.find(child))
+    this.setCoreNode(0)
 
     orbitControl?.addEventListener('start', () => {
       this.control?.onStartControl()
@@ -30,7 +39,6 @@ export default class CameraControl {
 
     this.params.orbitControl.mouseButtons = { LEFT: cameraControlMode[controlMode] }
     this.currentControlMode = controlMode
-    console.log(this.currentControlMode)
   }
 
   setDisableZoom(value?: boolean) {
@@ -43,9 +51,18 @@ export default class CameraControl {
 
   setTargetType(type: CameraTarget) {
     this.control?.dispose()
-    this.control = cameraTargets[type](this.params)
+    this.control = cameraTargets[type]({ ...this.params, coreNode: this.coreNode })
     this.control?.initialize()
     this.currentTarget = type
+  }
+
+  setCoreNode(index: number) {
+    if (index >= this.models.length || !this.control) {
+      return
+    }
+
+    this.coreNode = this.coreNodeFinder.find(this.models[index])
+    this.control.coreNode = this.coreNode
   }
 
   resetPosition() {
