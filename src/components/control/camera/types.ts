@@ -1,4 +1,4 @@
-import type CoreNodeFinder from '@/src/coreNodeFinder/coreNodeFinder'
+import type CoreNodeFinder from '../../../coreNodeFinder/coreNodeFinder'
 import AnimationControl from '../animation/animationControl'
 import { Camera } from '@react-three/fiber'
 import { Object3D, type Vector3 } from 'three'

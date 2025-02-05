@@ -1,4 +1,4 @@
-import type CoreNodeFinder from '@/src/coreNodeFinder/coreNodeFinder'
+import type CoreNodeFinder from '../../../coreNodeFinder/coreNodeFinder'
 import { Group, Object3DEventMap } from 'three'
 
 export type MaterialType = 'DEFAULT' | 'FABRIC' | 'METALIC' | 'TRANSPARENT'
