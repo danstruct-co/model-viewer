@@ -3,7 +3,7 @@
 import { ContactShadows, Environment, OrbitControls, Sky, useAnimations } from '@react-three/drei'
 import { Canvas, useFrame, useLoader, useThree } from '@react-three/fiber'
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react'
-import { Color, MeshStandardMaterial, Object3D } from 'three'
+import { Color, MeshStandardMaterial } from 'three'
 import AnimationControl from './control/animation/animationControl'
 import { OrbitControls as OrbitControlsImpl, Sky as SkyImpl } from 'three-stdlib'
 import CameraControl from './control/camera/cameraControl'
@@ -16,6 +16,7 @@ import React from 'react'
 import Loading from './loading'
 import { ErrorBoundary } from 'react-error-boundary'
 import Error from './error'
+import CoreNodeFinder from '../coreNodeFinder/coreNodeFinder'
 
 const ModelViewer = React.forwardRef<HTMLCanvasElement, ModelViewerProps>(
   (
@@ -52,10 +53,8 @@ const ModelViewer = React.forwardRef<HTMLCanvasElement, ModelViewerProps>(
       )
       const { actions, mixer } = useAnimations(animations, scene)
       const { scene: defaultScene, camera: defaultCamera, gl } = useThree()
+      const coreNodeFinder = new CoreNodeFinder({ nodes, actions })
 
-      const coreNodeRef = useRef<Object3D | undefined>(
-        Object.entries(nodes).find(([key]) => ['hips', 'pelvis'].some((coreKey) => key.toLowerCase().includes(coreKey)))?.[1]
-      )
       const orbitControlRef = useRef<OrbitControlsImpl>(null)
       const skyRef = useRef<SkyImpl>(null)
       const groundRef = useRef<MeshStandardMaterial>(null)
@@ -97,8 +96,7 @@ const ModelViewer = React.forwardRef<HTMLCanvasElement, ModelViewerProps>(
       const initializeModelControl = () => {
         modelControlRef.current = new ModelControl({
           scene,
-          nodes,
-          coreNode: coreNodeRef.current,
+          coreNodeFinder,
           materialType: modelSetting?.materialType,
           option: {
             defaultFixed: modelSetting?.defaultFixed,
@@ -124,7 +122,8 @@ const ModelViewer = React.forwardRef<HTMLCanvasElement, ModelViewerProps>(
 
       const initializeCameraControl = (animationControl: AnimationControl) => {
         cameraControlRef.current = new CameraControl({
-          coreNode: coreNodeRef.current,
+          scene,
+          coreNodeFinder,
           camera: defaultCamera,
           animationControl: animationControl,
           orbitControl: orbitControlRef.current,

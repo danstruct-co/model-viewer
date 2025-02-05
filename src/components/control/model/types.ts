@@ -1,14 +1,14 @@
-import { Group, Object3D, Object3DEventMap } from "three";
+import type CoreNodeFinder from '@/src/coreNodeFinder/coreNodeFinder'
+import { Group, Object3DEventMap } from 'three'
 
-export type MaterialType = "DEFAULT" | "FABRIC" | "METALIC";
+export type MaterialType = 'DEFAULT' | 'FABRIC' | 'METALIC' | 'TRANSPARENT'
 
 export type ModelControlParams = {
-  scene: Group<Object3DEventMap>;
-  nodes: { [name: string]: Object3D<Object3DEventMap> };
-  coreNode?: Object3D;
-  materialType?: MaterialType;
+  scene: Group<Object3DEventMap>
+  coreNodeFinder: CoreNodeFinder
+  materialType?: MaterialType
   option?: {
-    defaultMirrorMode?: boolean;
-    defaultFixed?: boolean;
-  };
-};
+    defaultMirrorMode?: boolean
+    defaultFixed?: boolean
+  }
+}
