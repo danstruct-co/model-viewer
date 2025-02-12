@@ -23,6 +23,11 @@ export default class ModelControl {
 
     option?.defaultMirrorMode && this.mirror()
     this.isFixed = !!option?.defaultFixed
+    option?.defaultScale && this.setScale(option.defaultScale)
+  }
+
+  setScale({ x, y, z }: Vector3) {
+    this.scene.scale.set(x, y, z)
   }
 
   mirror() {

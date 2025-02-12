@@ -1,5 +1,5 @@
 import type CoreNodeFinder from '../../../coreNodeFinder/coreNodeFinder'
-import { Group, Object3DEventMap } from 'three'
+import { Group, Object3DEventMap, type Vector3 } from 'three'
 
 export type MaterialType = 'DEFAULT' | 'FABRIC' | 'METALIC' | 'TRANSPARENT'
 
@@ -10,5 +10,6 @@ export type ModelControlParams = {
   option?: {
     defaultMirrorMode?: boolean
     defaultFixed?: boolean
+    defaultScale?: Vector3
   }
 }

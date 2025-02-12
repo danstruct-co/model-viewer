@@ -101,6 +101,7 @@ const ModelViewer = React.forwardRef<HTMLCanvasElement, ModelViewerProps>(
           option: {
             defaultFixed: modelSetting?.defaultFixed,
             defaultMirrorMode: modelSetting?.defaultMirrorMode,
+            defaultScale: modelSetting?.defaultScale,
           },
         })
 
@@ -167,8 +168,8 @@ const ModelViewer = React.forwardRef<HTMLCanvasElement, ModelViewerProps>(
         <group>
           <Environment preset="city" />
           <primitive object={scene} />
-          <ContactShadows position={[0, 0, 0]} scale={10} resolution={512} color="#000000" opacity={0.4} blur={0.5} />
-          <mesh position={[0, -0.02, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+          <ContactShadows position={[0, 0, 0]} scale={20} resolution={512} color="#000000" opacity={0.7} blur={0.7} />
+          <mesh position={[0, -0.1, 0]} rotation={[-Math.PI / 2, 0, 0]}>
             <planeGeometry attach="geometry" args={[20, 20]} />
             <meshStandardMaterial ref={groundRef} attach="material" color="white" />
           </mesh>

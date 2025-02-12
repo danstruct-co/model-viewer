@@ -45,6 +45,7 @@ export type ModelViewerProps = {
     materialType?: MaterialType
     defaultMirrorMode?: boolean
     defaultFixed?: boolean
+    defaultScale?: Vector3
   }
   /**
    * 환경 기본 설정
