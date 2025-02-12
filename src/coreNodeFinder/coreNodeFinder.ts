@@ -37,8 +37,16 @@ export default class CoreNodeFinder {
     return coreNode
   }
 
+  findAll(object: Object3D) {
+    let coreNodes: Object3D[] = []
+
+    object.traverse((node) => this.checkCoreNode(node) && coreNodes.push(node))
+
+    return coreNodes
+  }
+
   private checkCoreNode(node: Object3D) {
-    return this.coreKeys.some((coreKey) => node.name.toLowerCase().includes(coreKey))
+    return this.coreKeys.some((coreKey) => node.name.toLowerCase() === coreKey)
   }
 
   hasDefaultCoreNode(object: Object3D) {

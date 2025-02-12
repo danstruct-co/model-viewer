@@ -21,15 +21,49 @@ export default class ModelControl {
     this.materialType = materialType
     this.changeModel(0)
 
-    if (option?.defaultMirrorMode) {
-      this.mirror()
-    }
+    option?.defaultMirrorMode && this.mirror()
     this.isFixed = !!option?.defaultFixed
   }
 
   mirror() {
     this.scene.scale.setX(-this.scene.scale.x)
     this.isMirror = !this.isMirror
+  }
+
+  private fixCoreNode(coreNode: Object3D) {
+    const worldPosition = new Vector3()
+    coreNode.getWorldPosition(worldPosition)
+    worldPosition.setX(0)
+    worldPosition.setZ(0)
+
+    const localPosition = coreNode.parent!.worldToLocal(worldPosition)
+
+    const distance = new Vector3()
+    distance.copy(localPosition)
+    distance.sub(coreNode.position)
+
+    coreNode.position.copy(localPosition)
+    return distance
+  }
+
+  private fixPosition() {
+    if (!this.coreNode) {
+      return
+    }
+
+    this.coreNodeFinder.findAll(this.model!).forEach((coreNode) => {
+      if (coreNode.name !== this.coreNode?.name) {
+        this.fixCoreNode(coreNode)
+      }
+    })
+
+    const distance = this.fixCoreNode(this.coreNode)
+
+    this.models.forEach((model) => {
+      if (model.name !== this.model?.name) {
+        this.coreNodeFinder.find(model)?.position?.add(distance)
+      }
+    })
   }
 
   changeModel(index: number) {
@@ -58,26 +92,10 @@ export default class ModelControl {
   }
 
   updateOnFrame() {
-    if (!this.isFixed || !this.coreNode) {
+    if (!this.isFixed) {
       return
     }
 
-    const worldPosition = new Vector3()
-    this.coreNode.getWorldPosition(worldPosition)
-    worldPosition.setX(0)
-    worldPosition.setZ(0)
-
-    const localPosition = this.coreNode.parent!.worldToLocal(worldPosition)
-
-    const distance = new Vector3()
-    distance.copy(localPosition)
-    distance.sub(this.coreNode.position)
-
-    this.coreNode.position.copy(localPosition)
-    this.models.forEach((model) => {
-      if (model.name !== this.model?.name) {
-        this.coreNodeFinder.find(model)?.position?.add(distance)
-      }
-    })
+    this.fixPosition()
   }
 }
