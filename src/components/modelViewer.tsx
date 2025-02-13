@@ -2,7 +2,7 @@
 
 import { ContactShadows, Environment, OrbitControls, Sky, useAnimations } from '@react-three/drei'
 import { Canvas, useFrame, useLoader, useThree } from '@react-three/fiber'
-import { Suspense, useEffect, useMemo, useRef, useState } from 'react'
+import React, { Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { Color, MeshStandardMaterial } from 'three'
 import AnimationControl from './control/animation/animationControl'
 import { OrbitControls as OrbitControlsImpl, Sky as SkyImpl } from 'three-stdlib'
@@ -12,7 +12,6 @@ import EnvironmentControl from './control/environment/environmentControl'
 import AudioControl from './control/audio/audioControl'
 import type { ModelViewerProps } from './types'
 import { DRACOLoader, GLTFLoader } from 'three/examples/jsm/Addons.js'
-import React from 'react'
 import Loading from './loading'
 import { ErrorBoundary } from 'react-error-boundary'
 import Error from './error'
@@ -37,6 +36,7 @@ const ModelViewer = React.forwardRef<HTMLCanvasElement, ModelViewerProps>(
   ) => {
     const backgroundColorRef = useRef<Color>(null)
     const audioRef = useRef<HTMLAudioElement>(null)
+    const dracoLoaderRef = useRef<DRACOLoader>()
 
     const [progress, setProgress] = useState(0)
 
@@ -45,9 +45,11 @@ const ModelViewer = React.forwardRef<HTMLCanvasElement, ModelViewerProps>(
         GLTFLoader,
         url,
         (loader) => {
-          const draco = new DRACOLoader()
-          draco.setDecoderPath('https://www.gstatic.com/draco/v1/decoders/')
-          loader.setDRACOLoader(draco)
+          if (!dracoLoaderRef.current) {
+            dracoLoaderRef.current = new DRACOLoader()
+            dracoLoaderRef.current.setDecoderPath('https://www.gstatic.com/draco/v1/decoders/')
+          }
+          loader.setDRACOLoader(dracoLoaderRef.current)
         },
         ({ loaded, total }) => setProgress((loaded / total) * 100)
       )
@@ -83,6 +85,7 @@ const ModelViewer = React.forwardRef<HTMLCanvasElement, ModelViewerProps>(
 
         return () => {
           onDispose?.(modelViewerControl)
+          dracoLoaderRef.current?.dispose()
           gl.dispose()
         }
       }, [])
