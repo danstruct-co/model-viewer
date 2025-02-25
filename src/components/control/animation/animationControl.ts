@@ -1,9 +1,11 @@
 import { AnimationAction } from 'three'
-import { AnimationParams, State } from './types'
+import { AnimationParams, State, type Range } from './types'
 
 export default class AnimationControl {
   actions: AnimationAction[]
   duration: number = 0
+  min: number = 0
+  max: number = 0
   state: State = 'stop'
   autoplay?: boolean
   private currentTimescale: number = 1
@@ -18,6 +20,7 @@ export default class AnimationControl {
     this.actions = Array.from(Object.values(actions).filter((action) => !!action)) as AnimationAction[]
     this.actions = this.actions.length ? this.actions.slice(0, this.actions[0].getRoot().children.length) : []
     this.duration = this.actions.length ? this.actions[0].getClip().duration ?? 0 : 0
+    this.setRange(option?.range)
     this.autoplay = option?.autoplay
 
     if (this.autoplay) {
@@ -52,8 +55,13 @@ export default class AnimationControl {
       action.paused = true
     })
 
-    this.setTime(0)
+    this.setTime(this.min)
     this.setState('stop')
+  }
+
+  setRange(range: Range | undefined) {
+    this.min = range?.min ?? 0
+    this.max = range?.max ?? this.duration
   }
 
   private setState(state: State) {
@@ -105,6 +113,12 @@ export default class AnimationControl {
   updateOnFrame() {
     if (this.state !== 'play') {
       return
+    }
+
+    if (this.currentTime > this.max) {
+      this.setTime(this.min)
+      this.play()
+      this.onLoop?.()
     }
 
     this.timeUpdateListeners.forEach((listen) => {
