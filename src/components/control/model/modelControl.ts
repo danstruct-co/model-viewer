@@ -11,6 +11,8 @@ export default class ModelControl {
   model?: Object3D
   coreNode?: Object3D
   materialType?: MaterialType
+  private originMaterials: Record<string, Record<string, MeshStandardMaterial>> = {}
+  private currentModelIndex: number = 0
   isMirror: boolean = false
   isFixed: boolean = false
 
@@ -18,8 +20,9 @@ export default class ModelControl {
     this.scene = scene
     this.coreNodeFinder = coreNodeFinder
     this.models = getCoreModels(scene.children, this.coreNodeFinder)
+    this.models.forEach(({ uuid }) => (this.originMaterials[uuid] = {}))
     this.materialType = materialType
-    this.changeModel(0)
+    this.changeModel(this.currentModelIndex)
 
     option?.defaultMirrorMode && this.mirror()
     this.isFixed = !!option?.defaultFixed
@@ -82,7 +85,13 @@ export default class ModelControl {
     this.initialNodes(index)
   }
 
+  changeMaterial(materialType: MaterialType) {
+    this.materialType = materialType
+    this.initialNodes(this.currentModelIndex)
+  }
+
   private initialNodes(currentModelIndex: number) {
+    this.currentModelIndex = currentModelIndex
     this.models.forEach((model, index) => {
       model.traverse((node) => {
         node.frustumCulled = false
@@ -90,8 +99,13 @@ export default class ModelControl {
         if (!mesh.isMesh || !(mesh.material instanceof MeshStandardMaterial)) {
           return
         }
+
+        if (!this.originMaterials[model.uuid][mesh.uuid]) {
+          this.originMaterials[model.uuid][mesh.uuid] = mesh.material
+        }
+
         const materialType = currentModelIndex === index ? this.materialType ?? 'DEFAULT' : 'TRANSPARENT'
-        mesh.material = materials[materialType](mesh.material)
+        mesh.material = materials[materialType](this.originMaterials[model.uuid][mesh.uuid])
       })
     })
   }

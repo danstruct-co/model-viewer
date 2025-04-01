@@ -38,7 +38,7 @@ export default class CoreNodeFinder {
   }
 
   findAll(object: Object3D) {
-    let coreNodes: Object3D[] = []
+    const coreNodes: Object3D[] = []
 
     object.traverse((node) => this.checkCoreNode(node) && coreNodes.push(node))
 
