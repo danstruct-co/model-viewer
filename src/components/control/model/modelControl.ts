@@ -96,12 +96,12 @@ export default class ModelControl {
       model.traverse((node) => {
         node.frustumCulled = false
         const mesh = node as Mesh
-        if (!mesh.isMesh || !(mesh.material instanceof MeshStandardMaterial)) {
+        if (!mesh.isMesh || (!(mesh.material instanceof MeshStandardMaterial) && !this.originMaterials[model.uuid][mesh.uuid])) {
           return
         }
 
         if (!this.originMaterials[model.uuid][mesh.uuid]) {
-          this.originMaterials[model.uuid][mesh.uuid] = mesh.material
+          this.originMaterials[model.uuid][mesh.uuid] = mesh.material as MeshStandardMaterial
         }
 
         const materialType = currentModelIndex === index ? this.materialType ?? 'DEFAULT' : 'TRANSPARENT'
