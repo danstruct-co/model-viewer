@@ -1,7 +1,7 @@
-import { MeshStandardMaterial } from 'three'
+import { MeshBasicMaterial, MeshStandardMaterial, type Material } from 'three'
 import type { MaterialType } from './types'
 
-export const materials: Record<MaterialType, (origin: MeshStandardMaterial) => MeshStandardMaterial> = {
+export const materials: Record<MaterialType, (origin: MeshStandardMaterial) => Material> = {
   DEFAULT: (origin) => origin,
   FABRIC: (origin) => {
     const clone = origin.clone()
@@ -33,5 +33,30 @@ export const materials: Record<MaterialType, (origin: MeshStandardMaterial) => M
       opacity: 0.1,
     })
     return clone
+  },
+  CARTOON: (origin) => {
+    return new MeshBasicMaterial({
+      color: origin.color,
+      vertexColors: origin.vertexColors,
+      map: origin.map,
+      alphaMap: origin.alphaMap,
+      aoMap: origin.aoMap,
+      aoMapIntensity: origin.aoMapIntensity,
+      envMap: origin.envMap,
+      lightMap: origin.lightMap,
+      lightMapIntensity: origin.lightMapIntensity,
+      transparent: origin.transparent,
+      opacity: origin.opacity,
+      alphaTest: origin.alphaTest,
+      wireframe: origin.wireframe,
+      wireframeLinewidth: origin.wireframeLinewidth,
+      visible: origin.visible,
+      side: origin.side,
+      blending: origin.blending,
+      depthTest: origin.depthTest,
+      depthWrite: origin.depthWrite,
+      fog: origin.fog,
+      name: origin.name,
+    })
   },
 }
