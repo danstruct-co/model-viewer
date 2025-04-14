@@ -30,7 +30,7 @@ export const materials: Record<MaterialType, (origin: MeshStandardMaterial) => M
       roughness: 0.5,
       vertexColors: false,
       transparent: true,
-      opacity: 0.1,
+      opacity: 0.3,
     })
     return clone
   },
