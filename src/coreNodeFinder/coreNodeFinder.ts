@@ -7,7 +7,10 @@ export default class CoreNodeFinder {
 
   constructor({ nodes, actions }: CoreNodeFinderParams) {
     Object.entries(nodes).forEach(([key, node]) => (node.name = key))
+    this.registerAnimationKeys(actions)
+  }
 
+  private registerAnimationKeys(actions: Record<string, AnimationAction | null>) {
     let targetActions = Array.from(Object.values(actions).filter((action) => !!action)) as AnimationAction[]
     targetActions = targetActions.length ? targetActions.slice(0, targetActions[0].getRoot().children.length) : []
 
@@ -46,7 +49,7 @@ export default class CoreNodeFinder {
   }
 
   private checkCoreNode(node: Object3D) {
-    return this.coreKeys.some((coreKey) => node.name.toLowerCase() === coreKey)
+    return this.coreKeys.some((coreKey) => node.name.toLowerCase().includes(coreKey))
   }
 
   hasDefaultCoreNode(object: Object3D) {
