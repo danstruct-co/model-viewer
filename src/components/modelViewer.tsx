@@ -171,9 +171,9 @@ const ModelViewer = React.forwardRef<HTMLCanvasElement, ModelViewerProps>(
         <group>
           <Environment preset="city" />
           <primitive object={scene} />
-          <ContactShadows position={[0, 0, 0]} scale={20} resolution={512} color="#000000" opacity={0.7} blur={0.7} />
+          <ContactShadows position={[0, 0, 0]} scale={2} resolution={512} color="#000000" opacity={1} blur={0.7} />
           <mesh position={[0, -0.1, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-            <planeGeometry attach="geometry" args={[20, 20]} />
+            <planeGeometry attach="geometry" args={[100, 20]} />
             <meshStandardMaterial ref={groundRef} attach="material" color="white" />
           </mesh>
           <OrbitControls ref={orbitControlRef} />
