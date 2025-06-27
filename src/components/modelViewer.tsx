@@ -1,9 +1,9 @@
 'use client'
 
-import { ContactShadows, Environment, OrbitControls, Sky, useAnimations } from '@react-three/drei'
+import { Environment, OrbitControls, Sky, SoftShadows, useAnimations } from '@react-three/drei'
 import { Canvas, useFrame, useLoader, useThree } from '@react-three/fiber'
 import React, { Suspense, useEffect, useMemo, useRef, useState } from 'react'
-import { Color, MeshStandardMaterial } from 'three'
+import { Color, MeshStandardMaterial, PCFSoftShadowMap } from 'three'
 import AnimationControl from './control/animation/animationControl'
 import { OrbitControls as OrbitControlsImpl, Sky as SkyImpl } from 'three-stdlib'
 import CameraControl from './control/camera/cameraControl'
@@ -171,15 +171,26 @@ const ModelViewer = React.forwardRef<HTMLCanvasElement, ModelViewerProps>(
         <group>
           <Environment preset="city" />
           <primitive object={scene} />
-          <ContactShadows position={[0, 0, 0]} scale={20} resolution={512} color="#000000" opacity={0.7} blur={0.7} />
+          <SoftShadows
+            size={5}
+            samples={40}
+            focus={-20}  
+          />
+          <mesh receiveShadow position={[0, 0, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+            <planeGeometry args={[20, 20]} />
+            <shadowMaterial opacity={0.5} />
+          </mesh> 
           <mesh position={[0, -0.1, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-            <planeGeometry attach="geometry" args={[20, 20]} />
+            <planeGeometry attach="geometry" args={[100, 20]} />
             <meshStandardMaterial ref={groundRef} attach="material" color="white" />
           </mesh>
           <OrbitControls ref={orbitControlRef} />
-          <directionalLight position={[5, 5, 4]} intensity={0.8} />
+          <directionalLight position={[3, 5, 4]} intensity={0.8} castShadow 
+            target-position={[0, 0, 0]}
+            shadow-mapSize-width={2048}
+            shadow-mapSize-height={2048} />
           <ambientLight position={[5, 5, 4]} intensity={0.5} />
-          <Sky ref={skyRef} sunPosition={[100, 110, 50]} />
+          <Sky ref={skyRef} sunPosition={[100, 110, 20]} />
         </group>
       )
     }
@@ -190,7 +201,7 @@ const ModelViewer = React.forwardRef<HTMLCanvasElement, ModelViewerProps>(
       <div className={className} onClick={onClick}>
         <Suspense fallback={fallback?.(progress) ?? <Loading progress={progress} />}>
           <ErrorBoundary resetKeys={[url]} fallbackRender={({ error }) => <Error error={error} />}>
-            <Canvas ref={ref} shadows>
+            <Canvas ref={ref} shadows={{ enabled: true, type: PCFSoftShadowMap }}>
               {model}
               <color ref={backgroundColorRef} attach="background" />
             </Canvas>

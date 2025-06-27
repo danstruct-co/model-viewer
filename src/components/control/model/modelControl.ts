@@ -94,6 +94,7 @@ export default class ModelControl {
     this.currentModelIndex = currentModelIndex
     this.models.forEach((model, index) => {
       model.traverse((node) => {
+        node.castShadow = true
         node.frustumCulled = false
         const mesh = node as Mesh
         if (!mesh.isMesh || (!(mesh.material instanceof MeshStandardMaterial) && !this.originMaterials[model.uuid][mesh.uuid])) {
