@@ -19,7 +19,6 @@ export default class ModelControl {
   constructor({ scene, coreNodeFinder, materialType, option }: ModelControlParams) {
     this.scene = scene
     this.coreNodeFinder = coreNodeFinder
-    console.log(scene)
     this.models = getCoreModels(scene.children, this.coreNodeFinder)
     this.models.forEach(({ uuid }) => (this.originMaterials[uuid] = {}))
     this.materialType = materialType
