@@ -1,4 +1,4 @@
-import { MeshStandardMaterial, Object3D, Vector3, type Mesh } from 'three'
+import { MeshStandardMaterial, Object3D, SkinnedMesh, Vector3, type Mesh } from 'three'
 import { ModelControlParams, type MaterialType } from './types'
 import { materials } from './mapper'
 import type CoreNodeFinder from '../../../coreNodeFinder/coreNodeFinder'
@@ -19,9 +19,11 @@ export default class ModelControl {
   constructor({ scene, coreNodeFinder, materialType, option }: ModelControlParams) {
     this.scene = scene
     this.coreNodeFinder = coreNodeFinder
+    console.log(scene)
     this.models = getCoreModels(scene.children, this.coreNodeFinder)
     this.models.forEach(({ uuid }) => (this.originMaterials[uuid] = {}))
     this.materialType = materialType
+
     this.changeModel(this.currentModelIndex)
 
     option?.defaultMirrorMode && this.mirror()
@@ -81,34 +83,46 @@ export default class ModelControl {
 
     this.model = this.models[index]
     this.coreNode = this.coreNodeFinder.find(this.model)
+    this.currentModelIndex = index
 
-    this.initialNodes(index)
+    this.initialNodes()
   }
 
-  changeMaterial(materialType: MaterialType) {
-    this.materialType = materialType
-    this.initialNodes(this.currentModelIndex)
-  }
-
-  private initialNodes(currentModelIndex: number) {
-    this.currentModelIndex = currentModelIndex
-    this.models.forEach((model, index) => {
-      model.traverse((node) => {
-        node.castShadow = true
-        node.frustumCulled = false
-        const mesh = node as Mesh
-        if (!mesh.isMesh || (!(mesh.material instanceof MeshStandardMaterial) && !this.originMaterials[model.uuid][mesh.uuid])) {
-          return
-        }
-
-        if (!this.originMaterials[model.uuid][mesh.uuid]) {
-          this.originMaterials[model.uuid][mesh.uuid] = mesh.material as MeshStandardMaterial
-        }
-
-        const materialType = currentModelIndex === index ? this.materialType ?? 'DEFAULT' : 'TRANSPARENT'
-        mesh.material = materials[materialType](this.originMaterials[model.uuid][mesh.uuid])
-      })
+  private initialNodes() {
+    this.scene.traverse((node) => {
+      this.initialNode(node)
     })
+  }
+
+  private initialNode(node: Object3D) {
+    node.castShadow = true
+    node.frustumCulled = false
+
+    const mesh = node as Mesh
+    if (!mesh.isMesh || !(mesh.material instanceof MeshStandardMaterial)) {
+      return
+    }
+
+    const model = this.findModel((mesh as SkinnedMesh).skeleton?.bones?.at(0) ?? mesh)
+    if (!model) {
+      return
+    }
+
+    if (!this.originMaterials[model.uuid][mesh.uuid]) {
+      this.originMaterials[model.uuid][mesh.uuid] = mesh.material as MeshStandardMaterial
+    }
+
+    const materialType = this.model?.uuid === model.uuid ? this.materialType ?? 'DEFAULT' : 'TRANSPARENT'
+    mesh.material = materials[materialType](this.originMaterials[model.uuid][mesh.uuid])
+  }
+
+  private findModel(object?: Object3D): Object3D | undefined {
+    if (!object?.parent) {
+      return undefined
+    }
+
+    const targetModel = this.models.find(({ uuid }) => uuid === object.parent?.uuid)
+    return targetModel ?? this.findModel(object.parent)
   }
 
   updateOnFrame() {

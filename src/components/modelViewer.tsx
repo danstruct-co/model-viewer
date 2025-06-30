@@ -171,24 +171,24 @@ const ModelViewer = React.forwardRef<HTMLCanvasElement, ModelViewerProps>(
         <group>
           <Environment preset="city" />
           <primitive object={scene} />
-          <SoftShadows
-            size={5}
-            samples={40}
-            focus={-20}  
-          />
+          <SoftShadows size={5} samples={40} focus={-20} />
           <mesh receiveShadow position={[0, 0, 0]} rotation={[-Math.PI / 2, 0, 0]}>
             <planeGeometry args={[20, 20]} />
             <shadowMaterial opacity={0.5} />
-          </mesh> 
+          </mesh>
           <mesh position={[0, -0.1, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-            <planeGeometry attach="geometry" args={[100, 20]} />
+            <planeGeometry attach="geometry" args={[20, 20]} />
             <meshStandardMaterial ref={groundRef} attach="material" color="white" />
           </mesh>
           <OrbitControls ref={orbitControlRef} />
-          <directionalLight position={[3, 5, 4]} intensity={0.8} castShadow 
+          <directionalLight
+            position={[3, 5, 4]}
+            intensity={0.8}
+            castShadow
             target-position={[0, 0, 0]}
             shadow-mapSize-width={2048}
-            shadow-mapSize-height={2048} />
+            shadow-mapSize-height={2048}
+          />
           <ambientLight position={[5, 5, 4]} intensity={0.5} />
           <Sky ref={skyRef} sunPosition={[100, 110, 20]} />
         </group>
