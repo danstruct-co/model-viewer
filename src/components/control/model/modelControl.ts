@@ -75,6 +75,11 @@ export default class ModelControl {
     })
   }
 
+  changeMaterial(materialType: MaterialType) {
+    this.materialType = materialType
+    this.initialNodes()
+  }
+
   changeModel(index: number) {
     if (index >= this.models.length) {
       return
