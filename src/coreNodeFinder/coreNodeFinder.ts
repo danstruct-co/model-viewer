@@ -49,7 +49,7 @@ export default class CoreNodeFinder {
   }
 
   private checkCoreNode(node: Object3D) {
-    return this.coreKeys.some((coreKey) => node.name.toLowerCase().includes(coreKey))
+    return this.coreKeys.some((coreKey) => node.name.toLowerCase() === coreKey)
   }
 
   hasDefaultCoreNode(object: Object3D) {

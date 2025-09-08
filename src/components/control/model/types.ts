@@ -1,15 +1,17 @@
-import type CoreNodeFinder from '../../../coreNodeFinder/coreNodeFinder'
-import { Group, Object3DEventMap, type Vector3 } from 'three'
+import type CoreNodeFinder from "../../../coreNodeFinder/coreNodeFinder";
+import { Group, Object3DEventMap, type Vector3 } from "three";
 
-export type MaterialType = 'DEFAULT' | 'FABRIC' | 'METALIC' | 'TRANSPARENT' | 'CARTOON'
+export type MaterialType = "DEFAULT" | "FABRIC" | "METALIC" | "TRANSPARENT" | "CARTOON";
+
+export type AdditionalEffectType = "RIM_LIGHT" | "OUTLINE";
 
 export type ModelControlParams = {
-  scene: Group<Object3DEventMap>
-  coreNodeFinder: CoreNodeFinder
-  materialType?: MaterialType
+  scene: Group<Object3DEventMap>;
+  coreNodeFinder: CoreNodeFinder;
+  materialType?: MaterialType;
   option?: {
-    defaultMirrorMode?: boolean
-    defaultFixed?: boolean
-    defaultScale?: Vector3
-  }
-}
+    defaultMirrorMode?: boolean;
+    defaultFixed?: boolean;
+    defaultScale?: Vector3;
+  };
+};
