@@ -9,7 +9,7 @@ export default class FreeCamera {
   orbitControls: OrbitControls | null;
 
   constructor({ coreNode, camera, orbitControl, option }: CameraControlParams) {
-    this.defaultPosition = option?.defaultPosition ?? new Vector3(0, 0, 3);
+    this.defaultPosition = option?.defaultPosition ?? new Vector3(0, 0.3, 8);
     this.coreNode = coreNode;
     this.camera = camera;
     this.orbitControls = orbitControl;

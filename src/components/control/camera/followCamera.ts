@@ -21,7 +21,7 @@ export default class FollowCamera {
 
   constructor({ coreNode, camera, animationControl: animRef, orbitControl, option }: CameraControlParams) {
     this.coreNode = coreNode;
-    this.defaultPosition = option?.defaultPosition ?? new Vector3(0, 0, 3);
+    this.defaultPosition = option?.defaultPosition ?? new Vector3(0, 0.3, 8);
     this.cameraPosition = this.defaultPosition.clone();
     this.camera = camera;
     this.animation = animRef;

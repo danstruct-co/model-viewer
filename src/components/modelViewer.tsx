@@ -159,7 +159,12 @@ const ModelViewer = React.forwardRef<HTMLCanvasElement, ModelViewerProps>(
           <SoftShadows size={5} samples={40} focus={-20} />
           <mesh receiveShadow position={[0, 0, 0]} rotation={[-Math.PI / 2, 0, 0]}>
             <planeGeometry args={[10000, 10000]} />
-            <shadowMaterial opacity={0.5} />
+            <shadowMaterial 
+              opacity={0.5} 
+              polygonOffset={true}
+              polygonOffsetFactor={1}
+              polygonOffsetUnits={1}
+            />
           </mesh>
           <mesh position={[0, -0.1, 0]} rotation={[-Math.PI / 2, 0, 0]}>
             {/* <planeGeometry attach="geometry" args={[20, 20]} /> */}
@@ -179,7 +184,7 @@ const ModelViewer = React.forwardRef<HTMLCanvasElement, ModelViewerProps>(
       <div className={className} onClick={onClick}>
         <Suspense fallback={fallback?.(progress) ?? <Loading progress={progress} />}>
           <ErrorBoundary resetKeys={[url]} fallbackRender={({ error }) => <Error error={error} />}>
-            <Canvas ref={ref} shadows={{ enabled: true, type: PCFSoftShadowMap }}>
+            <Canvas ref={ref} shadows={{ enabled: true, type: PCFSoftShadowMap }} camera={{ fov: 20 }} gl={{ antialias: true, powerPreference: "high-performance" }}>
               {model}
               <color ref={backgroundColorRef} attach="background" />
             </Canvas>

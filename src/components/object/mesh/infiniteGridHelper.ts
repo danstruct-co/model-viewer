@@ -1,34 +1,21 @@
-import {
-  Color,
-  ColorRepresentation,
-  DoubleSide,
-  Mesh,
-  PlaneGeometry,
-  ShaderMaterial,
-} from 'three'
+import { Color, ColorRepresentation, DoubleSide, Mesh, PlaneGeometry, ShaderMaterial } from "three";
 
 export interface InfiniteGridHelperOptions {
-  size1?: number
-  size2?: number
-  color?: ColorRepresentation
-  distance?: number
-  axes?: string
+  size1?: number;
+  size2?: number;
+  color?: ColorRepresentation;
+  distance?: number;
+  axes?: string;
 }
 
 export class InfiniteGridHelper extends Mesh {
   constructor(options: InfiniteGridHelperOptions = {}) {
-    const {
-      size1 = 10,
-      size2 = 100,
-      color = 'white',
-      distance = 8000,
-      axes = 'xzy'
-    } = options
+    const { size1 = 10, size2 = 100, color = "white", distance = 8000, axes = "xzy" } = options;
 
-    const colorObj = color instanceof Color ? color : new Color(color)
-    const planeAxes = axes.substr(0, 2)
+    const colorObj = color instanceof Color ? color : new Color(color);
+    const planeAxes = axes.substr(0, 2);
 
-    const geometry = new PlaneGeometry(2, 2, 1, 1)
+    const geometry = new PlaneGeometry(2, 2, 1, 1);
 
     const material = new ShaderMaterial({
       side: DoubleSide,
@@ -36,9 +23,10 @@ export class InfiniteGridHelper extends Mesh {
         uSize1: { value: size1 },
         uSize2: { value: size2 },
         uColor: { value: colorObj },
-        uDistance: { value: distance }
+        uDistance: { value: distance },
       },
       transparent: true,
+      depthWrite: false, // Don't write to depth buffer
       vertexShader: `
         varying vec3 worldPosition;
         uniform float uDistance;
@@ -62,7 +50,14 @@ export class InfiniteGridHelper extends Mesh {
         
         float getGrid(float size) {
           vec2 r = worldPosition.${planeAxes} / size;
-          vec2 grid = abs(fract(r - 0.5) - 0.5) / fwidth(r);
+          
+          // Anti-aliasing with improved fwidth handling
+          vec2 fw = fwidth(r);
+          vec2 grid = abs(fract(r - 0.5) - 0.5) / max(fw, 0.001); // Prevent division by zero
+          
+          // Apply smoothstep for better anti-aliasing
+          grid = smoothstep(0.0, 2.0, grid);
+          
           float line = min(grid.x, grid.y);
           return 1.0 - min(line, 1.0);
         }
@@ -70,48 +65,53 @@ export class InfiniteGridHelper extends Mesh {
         void main() {
           float d = 1.0 - min(distance(cameraPosition.${planeAxes}, worldPosition.${planeAxes}) / uDistance, 1.0);
           
-          float g1 = getGrid(uSize1);
-          float g2 = getGrid(uSize2);
+          // Distance-based grid opacity to reduce distant flickering
+          float distanceFade = smoothstep(0.0, 0.3, d);
           
-          gl_FragColor = vec4(uColor.rgb, mix(g2, g1, g1) * pow(d, 3.0));
-          gl_FragColor.a = mix(0.5 * gl_FragColor.a, gl_FragColor.a, g2);
+          float g1 = getGrid(uSize1) * distanceFade;
+          float g2 = getGrid(uSize2) * distanceFade;
           
-          if (gl_FragColor.a <= 0.0) discard;
+          // Improved alpha blending to reduce flickering
+          float finalAlpha = mix(g2, g1, g1) * pow(d, 2.0); // Reduced power for smoother fade
+          finalAlpha = mix(0.3 * finalAlpha, finalAlpha, g2); // Less aggressive mixing
+          
+          gl_FragColor = vec4(uColor.rgb, finalAlpha);
+          
+          if (gl_FragColor.a <= 0.01) discard; // Higher threshold to reduce noise
         }
       `,
       extensions: {
-        derivatives: true
-      }
-    })
+        derivatives: true,
+      },
+    });
 
-    super(geometry, material)
-    this.frustumCulled = false
-    this.renderOrder = -1000
+    super(geometry, material);
+    this.frustumCulled = false;
+    this.renderOrder = -1000;
   }
 
-  // Utility methods for updating grid properties
   updateSize1(size: number): void {
     if (this.material instanceof ShaderMaterial) {
-      this.material.uniforms.uSize1.value = size
+      this.material.uniforms.uSize1.value = size;
     }
   }
 
   updateSize2(size: number): void {
     if (this.material instanceof ShaderMaterial) {
-      this.material.uniforms.uSize2.value = size
+      this.material.uniforms.uSize2.value = size;
     }
   }
 
   updateColor(color: ColorRepresentation): void {
     if (this.material instanceof ShaderMaterial) {
-      const colorObj = color instanceof Color ? color : new Color(color)
-      this.material.uniforms.uColor.value = colorObj
+      const colorObj = color instanceof Color ? color : new Color(color);
+      this.material.uniforms.uColor.value = colorObj;
     }
   }
 
   updateDistance(distance: number): void {
     if (this.material instanceof ShaderMaterial) {
-      this.material.uniforms.uDistance.value = distance
+      this.material.uniforms.uDistance.value = distance;
     }
   }
 }

@@ -54,6 +54,8 @@ export default class EnvironmentControl {
   }
 
   private addGrid() {
+    this.removeGrid();
+
     const { gridColor } = backgroundSettings[this.currentType];
     this.gridHelper = new InfiniteGridHelper({
       size1: 0.2,
@@ -61,15 +63,15 @@ export default class EnvironmentControl {
       color: gridColor,
       distance: 200,
     });
-    this.gridHelper.position.setY(-0.01);
     this.scene.add(this.gridHelper);
+    this.scene.userData.gridHelper = this.gridHelper;
 
     this.isActiveGrid = true;
   }
 
   private removeGrid() {
-    if (this.gridHelper) {
-      this.scene.remove(this.gridHelper);
+    if (this.scene.userData.gridHelper) {
+      this.scene.remove(this.scene.userData.gridHelper);
       this.gridHelper = undefined;
     }
 
