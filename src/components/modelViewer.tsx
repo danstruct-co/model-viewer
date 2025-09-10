@@ -24,8 +24,15 @@ const ModelViewer = React.forwardRef<HTMLCanvasElement, ModelViewerProps>(
     const dracoLoaderRef = useRef<DRACOLoader>();
 
     const [progress, setProgress] = useState(0);
+    const loadingStartTimeRef = useRef<number | null>(null);
 
     const Model = () => {
+      // GLTF 로딩 시작 시간 기록
+      if (loadingStartTimeRef.current === null) {
+        loadingStartTimeRef.current = performance.now();
+        console.log("GLTF 로딩 시작:", new Date().toISOString());
+      }
+
       const { nodes, scene, animations } = useLoader(
         GLTFLoader,
         url,
@@ -66,6 +73,15 @@ const ModelViewer = React.forwardRef<HTMLCanvasElement, ModelViewerProps>(
           environmentControl,
           audioControl,
         };
+
+        // GLTF 로딩 완료 시간 기록 및 로딩 시간 계산
+        if (loadingStartTimeRef.current) {
+          const loadingEndTime = performance.now();
+          const loadingDuration = loadingEndTime - loadingStartTimeRef.current;
+          console.log("GLTF 로딩 완료:", new Date().toISOString());
+          console.log(`GLTF 로딩 시간: ${loadingDuration.toFixed(2)}ms (${(loadingDuration / 1000).toFixed(2)}초)`);
+        }
+
         onLoaded?.(modelViewerControl);
 
         return () => {
