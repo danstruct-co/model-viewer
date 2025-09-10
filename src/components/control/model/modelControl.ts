@@ -21,6 +21,7 @@ export default class ModelControl {
     this.scene = scene;
     this.coreNodeFinder = coreNodeFinder;
     this.models = getCoreModels(scene.children, this.coreNodeFinder);
+    console.log(this.models);
     this.models.forEach(({ uuid }) => (this.originMaterials[uuid] = {}));
     this.materialType = materialType;
 
