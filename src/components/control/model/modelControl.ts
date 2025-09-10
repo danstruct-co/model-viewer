@@ -120,7 +120,6 @@ export default class ModelControl {
 
     const materialType = this.materialType ?? "DEFAULT";
     mesh.material = materials[materialType](this.originMaterials[model.uuid][mesh.uuid]);
-    mesh.material = this.model?.uuid === model.uuid ? mesh.material : materials.TRANSPARENT(mesh.material as MeshStandardMaterial);
 
     availableEffects.forEach(({ remove }) => remove(mesh));
     const materialEffects = effects[materialType];
