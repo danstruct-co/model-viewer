@@ -178,7 +178,13 @@ const ModelViewer = React.forwardRef<HTMLCanvasElement, ModelViewerProps>(
       <div className={className} onClick={onClick}>
         <Suspense fallback={fallback?.(progress) ?? <Loading progress={progress} />}>
           <ErrorBoundary resetKeys={[url]} fallbackRender={({ error }) => <Error error={error} />}>
-            <Canvas ref={ref} shadows={{ enabled: true, type: PCFSoftShadowMap }} camera={{ fov: 20 }} gl={{ antialias: true, powerPreference: "high-performance" }}>
+            <Canvas
+              ref={ref}
+              shadows={{ enabled: true, type: PCFSoftShadowMap }}
+              camera={{ fov: 20 }}
+              gl={{ antialias: true, powerPreference: "high-performance", alpha: true, stencil: true, depth: true, preserveDrawingBuffer: false }}
+              dpr={window.devicePixelRatio}
+            >
               {model}
               <color ref={backgroundColorRef} attach="background" />
             </Canvas>
