@@ -1,9 +1,10 @@
-import { MeshStandardMaterial, MeshToonMaterial, Color, type Material } from "three";
+import { MeshStandardMaterial, Color, type Material } from "three";
 import type { MaterialType } from "./types";
 import ToonGradientMap from "../../object/texture/toonGradientMap";
 import type { Effect } from "./effect/types";
 import outlineEffect from "./effect/outlineEffect";
 import rimLightEffect from "./effect/rimLightEffect";
+import { SaturatedToonMaterial } from "./SaturatedToonMaterial";
 
 export const materials: Record<MaterialType, (origin: MeshStandardMaterial) => Material> = {
   DEFAULT: (origin) => origin,
@@ -39,8 +40,10 @@ export const materials: Record<MaterialType, (origin: MeshStandardMaterial) => M
     return clone;
   },
   CARTOON: (origin) => {
-    return new MeshToonMaterial({
-      color: new Color(1.15, 1, 1),
+    return new SaturatedToonMaterial({
+      color: new Color(1.1, 1.1, 1.1),
+      emissive: new Color(0.1, 0.1, 0.1),
+      emissiveIntensity: 0.3,
       map: origin.map,
       gradientMap: new ToonGradientMap(),
       alphaMap: origin.alphaMap,
