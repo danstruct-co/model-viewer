@@ -1,10 +1,10 @@
-import { BackSide, SkinnedMesh, type BufferGeometry, type Mesh, ShaderMaterial, UniformsUtils, ShaderLib, MeshBasicMaterial } from "three";
+import { BackSide, SkinnedMesh, type Mesh, MeshBasicMaterial } from "three";
 import outlineGeometryBuilder from "../geometry/outlineGeometryBuilder";
 
 export default class OutlineMesh extends SkinnedMesh {
   constructor(mesh: Mesh) {
     super(
-      outlineGeometryBuilder.build(mesh.geometry, 0.003),
+      outlineGeometryBuilder.build(mesh.geometry, 0.001),
       new MeshBasicMaterial({
         color: 0x555555,
         side: BackSide,
