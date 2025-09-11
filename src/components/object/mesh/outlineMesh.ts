@@ -4,13 +4,14 @@ import outlineGeometryBuilder from "../geometry/outlineGeometryBuilder";
 export default class OutlineMesh extends SkinnedMesh {
   constructor(mesh: Mesh) {
     super(
-      outlineGeometryBuilder.build(mesh.geometry, 0.001),
+      outlineGeometryBuilder.build(mesh.geometry, 0.002),
       new MeshBasicMaterial({
         color: 0x555555,
         side: BackSide,
         transparent: true,
         fog: false,
         toneMapped: false,
+        alphaTest: 0.01,
       })
     );
 
