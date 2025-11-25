@@ -8,6 +8,7 @@ import type { BackgroundType } from './control/environment/types'
 import type ModelControl from './control/model/modelControl'
 import type AudioControl from './control/audio/audioControl'
 import type { MaterialOption, MaterialType } from './control/model/types'
+import type { CoreKey } from '../coreNodeFinder/types'
 
 export interface ModelViewerControl {
   modelControl: ModelControl
@@ -62,6 +63,10 @@ export type ModelViewerProps = {
     url?: string
     defaultVolume?: number
   }
+  /**
+   * 카메라 중심점 본 key
+   */
+  coreNodeKeys?: CoreKey[]
   /**
    * 로딩 완료 시 callback, 애니메이션, 카메라, 모델, 환경, 오디오 컨트롤 객체가 탑재되어 있음
    */

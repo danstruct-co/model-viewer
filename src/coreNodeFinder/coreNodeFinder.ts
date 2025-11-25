@@ -5,7 +5,8 @@ import { defaultCoreKeys, exceptCoreKeys } from './data'
 export default class CoreNodeFinder {
   private coreKeys: CoreKey[] = [...defaultCoreKeys]
 
-  constructor({ nodes, actions }: CoreNodeFinderParams) {
+  constructor({ nodes, actions, coreKeys }: CoreNodeFinderParams) {
+    coreKeys && (this.coreKeys = coreKeys)
     Object.entries(nodes).forEach(([key, node]) => (node.name = key))
     this.registerAnimationKeys(actions)
   }

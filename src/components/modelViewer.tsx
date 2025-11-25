@@ -26,6 +26,7 @@ const ModelViewer = React.forwardRef<HTMLCanvasElement, ModelViewerProps>(
       model: modelSetting,
       environment: environmentSetting,
       audio: audioSetting,
+      coreNodeKeys,
       onLoaded,
       onDispose,
       fallback,
@@ -55,7 +56,7 @@ const ModelViewer = React.forwardRef<HTMLCanvasElement, ModelViewerProps>(
       )
       const { actions, mixer } = useAnimations(animations, scene)
       const { scene: defaultScene, camera: defaultCamera, gl } = useThree()
-      const coreNodeFinder = new CoreNodeFinder({ nodes, actions })
+      const coreNodeFinder = new CoreNodeFinder({ nodes, actions, coreKeys: coreNodeKeys })
 
       const orbitControlRef = useRef<OrbitControlsImpl>(null)
       const skyRef = useRef<SkyImpl>(null)
@@ -97,7 +98,6 @@ const ModelViewer = React.forwardRef<HTMLCanvasElement, ModelViewerProps>(
       })
 
       const initializeModelControl = () => {
-        console.log(modelSetting?.materialOption)
         modelControlRef.current = new ModelControl({
           scene,
           coreNodeFinder,
