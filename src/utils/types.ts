@@ -12,14 +12,6 @@ export interface ModelMergerOptions {
    */
   rightHandGlbUrl?: string
   /**
-   * 왼손 본 필터링 패턴 (예: ['lefthand', 'leftfinger', 'leftthumb']) - Optional
-   */
-  leftHandBonePatterns?: string[]
-  /**
-   * 오른손 본 필터링 패턴 (예: ['righthand', 'rightfinger', 'rightthumb']) - Optional
-   */
-  rightHandBonePatterns?: string[]
-  /**
    * 로딩 진행률 콜백
    */
   onProgress?: (progress: number) => void
