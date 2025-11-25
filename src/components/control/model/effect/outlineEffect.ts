@@ -1,31 +1,31 @@
-import type { Effect } from "./types";
-import OutlineMesh from "../../../object/mesh/outlineMesh";
+import type { Effect } from './types'
+import OutlineMesh from '../../../object/mesh/outlineMesh'
 
 const outlineEffect: Effect = {
-  add: (mesh) => {
+  add: (mesh, option) => {
     if (!mesh.geometry || mesh.userData.hasOutline) {
-      return;
+      return
     }
 
-    const outlineMesh = new OutlineMesh(mesh);
+    const outlineMesh = new OutlineMesh(mesh, option?.thickness || 0.002)
 
-    mesh.add(outlineMesh);
-    mesh.userData.hasOutline = true;
-    mesh.userData.outlineMesh = outlineMesh;
+    mesh.add(outlineMesh)
+    mesh.userData.hasOutline = true
+    mesh.userData.outlineMesh = outlineMesh
   },
 
   remove: (mesh) => {
     if (!mesh.userData.hasOutline) {
-      return;
+      return
     }
 
     if (mesh.userData.outlineMesh) {
-      mesh.remove(mesh.userData.outlineMesh);
-      mesh.userData.outlineMesh = null;
+      mesh.remove(mesh.userData.outlineMesh)
+      mesh.userData.outlineMesh = null
     }
 
-    mesh.userData.hasOutline = false;
+    mesh.userData.hasOutline = false
   },
-};
+}
 
-export default outlineEffect;
+export default outlineEffect

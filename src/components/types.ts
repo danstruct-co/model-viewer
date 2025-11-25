@@ -7,7 +7,7 @@ import type EnvironmentControl from './control/environment/environmentControl'
 import type { BackgroundType } from './control/environment/types'
 import type ModelControl from './control/model/modelControl'
 import type AudioControl from './control/audio/audioControl'
-import type { MaterialType } from './control/model/types'
+import type { MaterialOption, MaterialType } from './control/model/types'
 
 export interface ModelViewerControl {
   modelControl: ModelControl
@@ -46,6 +46,7 @@ export type ModelViewerProps = {
     defaultMirrorMode?: boolean
     defaultFixed?: boolean
     defaultScale?: Vector3
+    materialOption?: MaterialOption
   }
   /**
    * 환경 기본 설정
