@@ -1,2 +1,2 @@
-export const leftHandBonePatterns = ['lefthand', 'leftfinger', 'leftthumb', 'leftindex', 'leftmiddle', 'leftring', 'leftpinky']
-export const rightHandBonePatterns = ['righthand', 'rightfinger', 'rightthumb', 'rightindex', 'rightmiddle', 'rightring', 'rightpinky']
+export const leftHandBonePatterns = ['lefthandthumb', 'lefthandindex', 'lefthandmiddle', 'lefthandring', 'lefthandpinky']
+export const rightHandBonePatterns = ['righthandthumb', 'righthandindex', 'righthandmiddle', 'righthandring', 'righthandpinky']
