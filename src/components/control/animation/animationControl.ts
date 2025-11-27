@@ -1,4 +1,4 @@
-import { AnimationAction, AnimationClip, KeyframeTrack, Quaternion } from 'three'
+import { AnimationAction, Quaternion } from 'three'
 import { AnimationParams, State, type Range } from './types'
 
 export default class AnimationControl {
