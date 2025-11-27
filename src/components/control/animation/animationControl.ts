@@ -21,7 +21,6 @@ export default class AnimationControl {
   constructor({ actions, mixer, option }: AnimationParams) {
     this.actions = Array.from(Object.values(actions).filter((action) => !!action)) as AnimationAction[]
     this.actions = this.actions.length ? this.actions.slice(0, this.actions[0].getRoot().children.length) : []
-    this.stripFirstFrameFromActions(this.actions)
     this.duration = this.actions.length ? this.actions[0].getClip().duration ?? 0 : 0
     this.setRange(option?.range)
     this.autoplay = option?.autoplay
@@ -180,65 +179,5 @@ export default class AnimationControl {
         }
       })
     })
-  }
-
-  private stripFirstFrameFromActions(actions: AnimationAction[]) {
-    const processed = new Set<AnimationClip>()
-
-    actions.forEach((action) => {
-      const clip = action.getClip()
-      if (processed.has(clip)) {
-        return
-      }
-
-      processed.add(clip)
-      this.stripFirstFrameFromClip(clip)
-    })
-  }
-
-  private stripFirstFrameFromClip(clip: AnimationClip) {
-    if (!clip.tracks.some((track) => track.times.length > 1)) {
-      return
-    }
-
-    let updated = false
-    const sanitizedTracks = clip.tracks.map((track) => {
-      if (track.times.length <= 1) {
-        return track
-      }
-
-      updated = true
-      return this.removeFirstKeyframeFromTrack(track)
-    })
-
-    if (!updated) {
-      return
-    }
-
-    clip.tracks = sanitizedTracks
-    clip.resetDuration()
-  }
-
-  private removeFirstKeyframeFromTrack(track: KeyframeTrack) {
-    const sanitizedTrack = track.clone()
-    const keyCount = sanitizedTrack.times.length - 1
-
-    if (keyCount <= 0) {
-      return sanitizedTrack
-    }
-
-    const firstTime = sanitizedTrack.times[1]
-    const newTimes = new Float32Array(keyCount)
-    for (let i = 0; i < keyCount; i += 1) {
-      newTimes[i] = sanitizedTrack.times[i + 1] - firstTime
-    }
-
-    const valueSize = sanitizedTrack.getValueSize()
-    const newValues = sanitizedTrack.values.slice(valueSize)
-
-    sanitizedTrack.times = newTimes
-    sanitizedTrack.values = newValues
-
-    return sanitizedTrack
   }
 }

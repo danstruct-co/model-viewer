@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { ModelMerger } from '../utils/modelMerger'
-import type { ModelMergerOptions } from '../utils/types'
+import { ModelMerger } from '../utils/modelMerger/modelMerger'
+import type { ModelMergerOptions } from '../utils/modelMerger/types'
 
 export default function useModelMerger() {
   const [mergedUrl, setMergedUrl] = useState<string | null>(null)
