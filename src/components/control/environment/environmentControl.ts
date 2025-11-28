@@ -49,7 +49,6 @@ export default class EnvironmentControl {
   }
 
   setShadowActive(isActive: boolean) {
-    console.log(isActive)
     this.removeShadow()
 
     if (!isActive) {
