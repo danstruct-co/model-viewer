@@ -23,7 +23,7 @@ export default class CoreNodeFinder {
         ?.name.split('.')
         .at?.(0)
 
-      if (key) {
+      if (key && !this.coreKeys.map(({ name }) => name).includes(key)) {
         this.coreKeys.push({ name: key.toLowerCase(), constraint: 'EXACT' })
       }
     })
