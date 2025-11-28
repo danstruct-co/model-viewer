@@ -30,5 +30,6 @@ export type CameraControlParams = {
     defaultControlMode?: ControlMode
     defaultPosition?: Vector3
     disableZoom?: boolean
+    up?: Vector3
   }
 }

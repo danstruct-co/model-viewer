@@ -31,6 +31,7 @@ export type ModelViewerProps = {
     defaultControlMode?: ControlMode
     defaultTarget?: CameraTarget
     disableZoom?: boolean
+    up?: Vector3
   }
   /**
    * 애니메이션 기본 설정
@@ -55,6 +56,7 @@ export type ModelViewerProps = {
   environment?: {
     defaultBackground?: BackgroundType
     defaultActiveGrid?: boolean
+    defaultActiveShadow?: boolean
   }
   /**
    * 오디오 기본 설정

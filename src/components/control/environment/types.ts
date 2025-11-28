@@ -17,5 +17,6 @@ export type EnvironmentControlParams = {
   option?: {
     defaultBackground?: BackgroundType
     defaultGridActive?: boolean
+    defaultShadowActive?: boolean
   }
 }
