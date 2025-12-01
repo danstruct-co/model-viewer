@@ -25,5 +25,12 @@ export default function useModelMerger() {
     }
   }
 
-  return { merge, mergedUrl, progress, error, isLoading }
+  const clear = () => {
+    setIsLoading(false)
+    setProgress(0)
+    setError(null)
+    setMergedUrl(null)
+  }
+
+  return { merge, clear, mergedUrl, progress, error, isLoading }
 }
