@@ -12,4 +12,11 @@ export const backgroundSettings = {
     groundColor: 0x050505,
     hasSky: false,
   },
-};
+
+  white: {
+    backgroundColor: 0xebebeb,
+    gridColor: 0xdddddd,
+    groundColor: 0xffffff,
+    hasSky: false,
+  },
+}

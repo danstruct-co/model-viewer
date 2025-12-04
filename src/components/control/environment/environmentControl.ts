@@ -1,4 +1,4 @@
-import { Color, Euler, Mesh, PlaneGeometry, Scene, ShadowMaterial, Vector3, type MeshStandardMaterial } from 'three'
+import { Color, Euler, Mesh, PlaneGeometry, Scene, ShadowMaterial, type MeshStandardMaterial } from 'three'
 import { BackgroundType, EnvironmentControlParams } from './types'
 import { Sky } from 'three-stdlib'
 import { backgroundSettings } from './mapper'
