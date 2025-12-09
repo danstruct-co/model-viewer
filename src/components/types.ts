@@ -49,6 +49,7 @@ export type ModelViewerProps = {
     defaultFixed?: boolean
     defaultScale?: Vector3
     materialOption?: MaterialOption
+    opaqueOtherModel?: boolean
   }
   /**
    * 환경 기본 설정

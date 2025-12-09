@@ -13,6 +13,7 @@ export type ModelControlOption = {
   defaultFixed?: boolean
   defaultScale?: Vector3
   materialOption?: MaterialOption
+  opaqueOtherModel?: boolean
 }
 
 export type ModelControlParams = {

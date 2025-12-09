@@ -107,6 +107,7 @@ const ModelViewer = React.forwardRef<HTMLCanvasElement, ModelViewerProps>(
             defaultMirrorMode: modelSetting?.defaultMirrorMode,
             defaultScale: modelSetting?.defaultScale,
             materialOption: modelSetting?.materialOption,
+            opaqueOtherModel: modelSetting?.opaqueOtherModel,
           },
         })
 
