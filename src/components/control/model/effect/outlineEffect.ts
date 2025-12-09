@@ -1,9 +1,10 @@
 import type { Effect } from './types'
 import OutlineMesh from '../../../object/mesh/outlineMesh'
+import type { SkinnedMesh } from 'three'
 
 const outlineEffect: Effect = {
   add: (mesh, option) => {
-    if (!mesh.geometry || mesh.userData.hasOutline) {
+    if (!mesh.geometry || mesh.userData.hasOutline || !(mesh as SkinnedMesh).isSkinnedMesh) {
       return
     }
 
