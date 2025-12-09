@@ -1,9 +1,10 @@
 import type { Effect } from "./types";
 import RimLightMesh from "../../../object/mesh/rimLightMesh";
+import type { SkinnedMesh } from "three";
 
 const rimLightEffect: Effect = {
   add: (mesh) => {
-    if (!mesh.geometry || mesh.userData.hasRimLight) {
+    if (!mesh.geometry || mesh.userData.hasRimLight || !(mesh as SkinnedMesh).isSkinnedMesh) {
       return;
     }
 
