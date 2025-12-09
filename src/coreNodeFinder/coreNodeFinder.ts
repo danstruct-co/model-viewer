@@ -55,7 +55,7 @@ export default class CoreNodeFinder {
 
   hasDefaultCoreNode(object: Object3D) {
     let hasCoreNode = false;
-    object.traverse((node) => this.hasCoreNode(defaultCoreKeys, node) && (hasCoreNode = true));
+    object.traverse((node) => this.hasCoreNode(defaultCoreKeys, node) && (node as Bone).isBone && (hasCoreNode = true));
 
     return hasCoreNode;
   }
@@ -63,9 +63,9 @@ export default class CoreNodeFinder {
   private hasCoreNode(coreKeys: CoreKey[], node: { name: string }) {
     return coreKeys.some(({ name, constraint }) => {
       if (constraint === "INCLUDES") {
-        return node.name.toLowerCase().includes(name) && (node as Bone).isBone;
+        return node.name.toLowerCase().includes(name);
       } else {
-        return node.name.toLowerCase() === name && (node as Bone).isBone;
+        return node.name.toLowerCase() === name;
       }
     });
   }
