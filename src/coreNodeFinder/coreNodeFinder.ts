@@ -1,4 +1,4 @@
-import type { AnimationAction, Object3D } from "three";
+import type { AnimationAction, Bone, Object3D } from "three";
 import type { CoreKey, CoreNodeFinderParams } from "./types";
 import { defaultCoreKeys, exceptCoreKeys } from "./data";
 
@@ -50,7 +50,7 @@ export default class CoreNodeFinder {
   }
 
   private checkCoreNode(node: Object3D) {
-    return this.hasCoreNode(this.coreKeys, node);
+    return this.hasCoreNode(this.coreKeys, node) && (node as Bone).isBone;
   }
 
   hasDefaultCoreNode(object: Object3D) {
@@ -63,9 +63,9 @@ export default class CoreNodeFinder {
   private hasCoreNode(coreKeys: CoreKey[], node: { name: string }) {
     return coreKeys.some(({ name, constraint }) => {
       if (constraint === "INCLUDES") {
-        return node.name.toLowerCase().includes(name);
+        return node.name.toLowerCase().includes(name) && (node as Bone).isBone;
       } else {
-        return node.name.toLowerCase() === name;
+        return node.name.toLowerCase() === name && (node as Bone).isBone;
       }
     });
   }
