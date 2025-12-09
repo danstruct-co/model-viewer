@@ -1,5 +1,5 @@
 import { MeshStandardMaterial, Object3D, SkinnedMesh, Vector3, type Mesh } from "three";
-import { ModelControlParams, type MaterialType } from "./types";
+import { ModelControlParams, type MaterialType, type ModelControlOption } from "./types";
 import { effects, materials } from "./mapper";
 import type CoreNodeFinder from "../../../coreNodeFinder/coreNodeFinder";
 import { getCoreModels } from "../utils";
@@ -16,14 +16,15 @@ export default class ModelControl {
   private currentModelIndex: number = 0;
   isMirror: boolean = false;
   isFixed: boolean = false;
+  option?: ModelControlOption;
 
   constructor({ scene, coreNodeFinder, materialType, option }: ModelControlParams) {
     this.scene = scene;
     this.coreNodeFinder = coreNodeFinder;
-    this.models = getCoreModels(scene.children, this.coreNodeFinder);
-    console.log(this.models);
+    this.models = getCoreModels(scene, this.coreNodeFinder);
     this.models.forEach(({ uuid }) => (this.originMaterials[uuid] = {}));
     this.materialType = materialType;
+    this.option = option;
 
     this.changeModel(this.currentModelIndex);
 
@@ -122,8 +123,7 @@ export default class ModelControl {
     mesh.material = materials[materialType](this.originMaterials[model.uuid][mesh.uuid]);
 
     availableEffects.forEach(({ remove }) => remove(mesh));
-    const materialEffects = effects[materialType];
-    materialEffects.forEach(({ add }) => add(mesh));
+    effects[materialType].forEach(({ add }) => add(mesh, this.option?.materialOption));
   }
 
   private findModel(object?: Object3D): Object3D | undefined {

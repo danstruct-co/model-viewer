@@ -7,7 +7,8 @@ import type EnvironmentControl from './control/environment/environmentControl'
 import type { BackgroundType } from './control/environment/types'
 import type ModelControl from './control/model/modelControl'
 import type AudioControl from './control/audio/audioControl'
-import type { MaterialType } from './control/model/types'
+import type { MaterialOption, MaterialType } from './control/model/types'
+import type { CoreKey } from '../coreNodeFinder/types'
 
 export interface ModelViewerControl {
   modelControl: ModelControl
@@ -30,6 +31,7 @@ export type ModelViewerProps = {
     defaultControlMode?: ControlMode
     defaultTarget?: CameraTarget
     disableZoom?: boolean
+    up?: Vector3
   }
   /**
    * 애니메이션 기본 설정
@@ -46,6 +48,7 @@ export type ModelViewerProps = {
     defaultMirrorMode?: boolean
     defaultFixed?: boolean
     defaultScale?: Vector3
+    materialOption?: MaterialOption
   }
   /**
    * 환경 기본 설정
@@ -53,6 +56,7 @@ export type ModelViewerProps = {
   environment?: {
     defaultBackground?: BackgroundType
     defaultActiveGrid?: boolean
+    defaultActiveShadow?: boolean
   }
   /**
    * 오디오 기본 설정
@@ -61,6 +65,10 @@ export type ModelViewerProps = {
     url?: string
     defaultVolume?: number
   }
+  /**
+   * 카메라 중심점 본 key
+   */
+  coreNodeKeys?: CoreKey[]
   /**
    * 로딩 완료 시 callback, 애니메이션, 카메라, 모델, 환경, 오디오 컨트롤 객체가 탑재되어 있음
    */

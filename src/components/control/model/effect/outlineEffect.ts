@@ -3,12 +3,12 @@ import OutlineMesh from "../../../object/mesh/outlineMesh";
 import type { SkinnedMesh } from "three";
 
 const outlineEffect: Effect = {
-  add: (mesh) => {
+  add: (mesh, option) => {
     if (!mesh.geometry || mesh.userData.hasOutline || !(mesh as SkinnedMesh).isSkinnedMesh) {
       return;
     }
 
-    const outlineMesh = new OutlineMesh(mesh);
+    const outlineMesh = new OutlineMesh(mesh, option?.thickness || 0.002);
 
     mesh.add(outlineMesh);
     mesh.userData.hasOutline = true;

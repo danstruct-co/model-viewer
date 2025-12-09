@@ -1,43 +1,43 @@
-import { MeshStandardMaterial, Color, type Material } from "three";
-import type { MaterialType } from "./types";
-import ToonGradientMap from "../../object/texture/toonGradientMap";
-import type { Effect } from "./effect/types";
-import outlineEffect from "./effect/outlineEffect";
-import rimLightEffect from "./effect/rimLightEffect";
-import { SaturatedToonMaterial } from "./SaturatedToonMaterial";
+import { MeshStandardMaterial, Color, type Material } from 'three'
+import type { MaterialType } from './types'
+import ToonGradientMap from '../../object/texture/toonGradientMap'
+import type { Effect } from './effect/types'
+import outlineEffect from './effect/outlineEffect'
+import rimLightEffect from './effect/rimLightEffect'
+import { SaturatedToonMaterial } from './SaturatedToonMaterial'
 
 export const materials: Record<MaterialType, (origin: MeshStandardMaterial) => Material> = {
   DEFAULT: (origin) => origin,
   FABRIC: (origin) => {
-    const clone = origin.clone();
+    const clone = origin.clone()
     clone.setValues({
       metalness: 0,
       roughness: 0.5,
       vertexColors: false,
       transparent: false,
-    });
-    return clone;
+    })
+    return clone
   },
   METALIC: (origin) => {
-    const clone = origin.clone();
+    const clone = origin.clone()
     clone.setValues({
       metalness: 1.0,
       roughness: 0,
       vertexColors: false,
       transparent: false,
-    });
-    return clone;
+    })
+    return clone
   },
   TRANSPARENT: (origin) => {
-    const clone = origin.clone();
+    const clone = origin.clone()
     clone.setValues({
       metalness: 0,
       roughness: 0.5,
       vertexColors: false,
       transparent: true,
       opacity: 0.3,
-    });
-    return clone;
+    })
+    return clone
   },
   CARTOON: (origin) => {
     return new SaturatedToonMaterial({
@@ -64,9 +64,9 @@ export const materials: Record<MaterialType, (origin: MeshStandardMaterial) => M
       fog: origin.fog,
       name: origin.name,
       vertexColors: false,
-    });
+    })
   },
-};
+}
 
 export const effects: Record<MaterialType, Effect[]> = {
   DEFAULT: [],
@@ -74,4 +74,4 @@ export const effects: Record<MaterialType, Effect[]> = {
   METALIC: [],
   TRANSPARENT: [],
   CARTOON: [rimLightEffect, outlineEffect],
-};
+}

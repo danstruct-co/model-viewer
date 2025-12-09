@@ -5,7 +5,8 @@ import { defaultCoreKeys, exceptCoreKeys } from "./data";
 export default class CoreNodeFinder {
   private coreKeys: CoreKey[] = [...defaultCoreKeys];
 
-  constructor({ nodes, actions }: CoreNodeFinderParams) {
+  constructor({ nodes, actions, coreKeys }: CoreNodeFinderParams) {
+    coreKeys && (this.coreKeys = coreKeys);
     Object.entries(nodes).forEach(([key, node]) => (node.name = key));
     this.registerAnimationKeys(actions);
   }
@@ -17,16 +18,15 @@ export default class CoreNodeFinder {
     const clips = targetActions.map((action) => action.getClip());
     clips.forEach((clip) => {
       const key = clip.tracks
-        .filter((track) => this.hasCoreNode(exceptCoreKeys, track))
+        .filter((track) => !this.hasCoreNode(exceptCoreKeys, track))
         .at(0)
         ?.name.split(".")
         .at?.(0);
 
-      if (key) {
+      if (key && !this.coreKeys.map(({ name }) => name).includes(key)) {
         this.coreKeys.push({ name: key.toLowerCase(), constraint: "EXACT" });
       }
     });
-    console.log(this.coreKeys);
   }
 
   find(object: Object3D) {
@@ -36,7 +36,7 @@ export default class CoreNodeFinder {
       return object;
     }
 
-    object.traverse((node) => this.checkCoreNode(node) && (coreNode = node));
+    object.traverse((node) => !coreNode && this.checkCoreNode(node) && (coreNode = node));
 
     return coreNode;
   }

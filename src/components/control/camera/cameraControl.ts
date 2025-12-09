@@ -1,4 +1,4 @@
-import type { Object3D } from "three";
+import { type Object3D } from "three";
 import { cameraControlMode, cameraTargets } from "./mapper";
 import { CameraControlAction, CameraControlParams, CameraTarget, ControlMode } from "./types";
 import type CoreNodeFinder from "../../../coreNodeFinder/coreNodeFinder";
@@ -16,14 +16,17 @@ export default class CameraControl {
   constructor(params: CameraControlParams) {
     this.params = params;
     this.coreNodeFinder = params.coreNodeFinder;
-    const { option, orbitControl } = params;
+    const { camera, option, orbitControl } = params;
 
-    this.models = getCoreModels(params.scene.children, this.coreNodeFinder);
+    this.models = getCoreModels(params.scene, this.coreNodeFinder);
     this.setCoreNode(0);
 
     this.setControlMode(option?.defaultControlMode ?? "rotate");
     this.setDisableZoom(option?.disableZoom);
     this.setTargetType(option?.defaultTarget ?? "model");
+
+    camera.up = option?.up ?? camera.up;
+    orbitControl?.update();
 
     orbitControl?.addEventListener("start", () => {
       this.control?.onStartControl();

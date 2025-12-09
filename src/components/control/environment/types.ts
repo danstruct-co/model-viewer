@@ -1,7 +1,7 @@
 import { Color, ColorRepresentation, Scene, type MeshStandardMaterial } from 'three'
 import { Sky } from 'three-stdlib'
 
-export type BackgroundType = 'default' | 'dark'
+export type BackgroundType = 'default' | 'dark' | 'white'
 
 export type BackgroundSetting = {
   backgroundColor: ColorRepresentation
@@ -17,5 +17,7 @@ export type EnvironmentControlParams = {
   option?: {
     defaultBackground?: BackgroundType
     defaultGridActive?: boolean
+    defaultShadowActive?: boolean
+    defaultSkyVisible?: boolean
   }
 }

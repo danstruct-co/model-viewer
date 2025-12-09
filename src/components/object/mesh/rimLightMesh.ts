@@ -1,5 +1,5 @@
-import { SkinnedMesh, type Mesh } from "three";
-import RimLightMaterial from "../material/rimLightMaterial";
+import { SkinnedMesh, type Mesh } from 'three'
+import RimLightMaterial from '../material/rimLightMaterial'
 
 export default class RimLightMesh extends SkinnedMesh {
   constructor(mesh: Mesh) {
@@ -10,7 +10,7 @@ export default class RimLightMesh extends SkinnedMesh {
     this.castShadow = false
     this.receiveShadow = false
     this.frustumCulled = false
-  
+
     const skinnedMesh = mesh as SkinnedMesh
     if (!skinnedMesh.isSkinnedMesh) {
       return
