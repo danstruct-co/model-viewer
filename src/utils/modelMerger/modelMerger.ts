@@ -1,4 +1,6 @@
-import { DRACOLoader, GLTFLoader, GLTFExporter } from 'three/examples/jsm/Addons.js'
+import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js'
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
+import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js'
 import { leftHandBonePatterns, rightHandBonePatterns } from './data'
 import type { ModelMergerOptions } from './types'
 import { extractHandAnimation, extractHandData } from './animationExtractor'
