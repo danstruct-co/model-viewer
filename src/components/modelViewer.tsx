@@ -102,6 +102,7 @@ const ModelViewer = React.forwardRef<HTMLCanvasElement, ModelViewerProps>(
         modelControlRef.current = new ModelControl({
           scene,
           coreNodeFinder,
+          camera: defaultCamera,
           materialType: modelSetting?.materialType,
           option: {
             defaultFixed: modelSetting?.defaultFixed,

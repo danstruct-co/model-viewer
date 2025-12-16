@@ -1,5 +1,5 @@
 import type CoreNodeFinder from '../../../coreNodeFinder/coreNodeFinder'
-import { Group, Object3DEventMap, type Vector3 } from 'three'
+import { Group, Object3DEventMap, type Camera, type Vector3 } from 'three'
 import type { MaterialEffectOption } from './effect/types'
 
 export type MaterialType = 'DEFAULT' | 'FABRIC' | 'METALIC' | 'TRANSPARENT' | 'CARTOON'
@@ -19,6 +19,7 @@ export type ModelControlOption = {
 export type ModelControlParams = {
   scene: Group<Object3DEventMap>
   coreNodeFinder: CoreNodeFinder
+  camera: Camera
   materialType?: MaterialType
   option?: ModelControlOption
 }

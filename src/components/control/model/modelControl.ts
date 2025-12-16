@@ -1,4 +1,4 @@
-import { MeshStandardMaterial, Object3D, SkinnedMesh, Vector3, type Mesh } from 'three'
+import { MeshStandardMaterial, Object3D, SkinnedMesh, Vector3, type Camera, type Mesh } from 'three'
 import { ModelControlParams, type MaterialType, type ModelControlOption } from './types'
 import { effects, materials } from './mapper'
 import type CoreNodeFinder from '../../../coreNodeFinder/coreNodeFinder'
@@ -7,6 +7,7 @@ import { availableEffects, effectKeys } from './data'
 
 export default class ModelControl {
   scene: Object3D
+  private camera: Camera
   private coreNodeFinder: CoreNodeFinder
   models: Object3D[] = []
   model?: Object3D
@@ -18,8 +19,9 @@ export default class ModelControl {
   isFixed: boolean = false
   option?: ModelControlOption
 
-  constructor({ scene, coreNodeFinder, materialType, option }: ModelControlParams) {
+  constructor({ scene, coreNodeFinder, camera, materialType, option }: ModelControlParams) {
     this.scene = scene
+    this.camera = camera
     this.coreNodeFinder = coreNodeFinder
     this.models = getCoreModels(scene, this.coreNodeFinder)
     this.models.forEach(({ uuid }) => (this.originMaterials[uuid] = {}))
@@ -38,7 +40,18 @@ export default class ModelControl {
   }
 
   mirror() {
-    this.scene.scale.setX(-this.scene.scale.x)
+    if (Math.abs(this.camera.up.x) > 0) {
+      this.scene.scale.setZ(-this.scene.scale.z)
+    }
+
+    if (Math.abs(this.camera.up.y) > 0) {
+      this.scene.scale.setX(-this.scene.scale.x)
+    }
+
+    if (Math.abs(this.camera.up.z) > 0) {
+      this.scene.scale.setY(-this.scene.scale.y)
+    }
+
     this.isMirror = !this.isMirror
   }
 
