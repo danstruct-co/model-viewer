@@ -7,7 +7,7 @@ import type EnvironmentControl from './control/environment/environmentControl'
 import type { BackgroundType } from './control/environment/types'
 import type ModelControl from './control/model/modelControl'
 import type AudioControl from './control/audio/audioControl'
-import type { MaterialOption, MaterialType } from './control/model/types'
+import type { Axis, MaterialOption, MaterialType } from './control/model/types'
 import type { CoreKey } from '../coreNodeFinder/types'
 
 export interface ModelViewerControl {
@@ -50,6 +50,7 @@ export type ModelViewerProps = {
     defaultScale?: Vector3
     materialOption?: MaterialOption
     opaqueOtherModel?: boolean
+    mirrorAxis?: Axis
   }
   /**
    * 환경 기본 설정

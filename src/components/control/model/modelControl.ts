@@ -1,5 +1,5 @@
 import { MeshStandardMaterial, Object3D, SkinnedMesh, Vector3, type Camera, type Mesh } from 'three'
-import { ModelControlParams, type MaterialType, type ModelControlOption } from './types'
+import { ModelControlParams, type Axis, type MaterialType, type ModelControlOption } from './types'
 import { effects, materials } from './mapper'
 import type CoreNodeFinder from '../../../coreNodeFinder/coreNodeFinder'
 import { getCoreModels } from '../utils'
@@ -7,7 +7,6 @@ import { availableEffects, effectKeys } from './data'
 
 export default class ModelControl {
   scene: Object3D
-  private camera: Camera
   private coreNodeFinder: CoreNodeFinder
   models: Object3D[] = []
   model?: Object3D
@@ -16,16 +15,17 @@ export default class ModelControl {
   private originMaterials: Record<string, Record<string, MeshStandardMaterial>> = {}
   private currentModelIndex: number = 0
   isMirror: boolean = false
+  private mirrorAxis: Axis = 'x'
   isFixed: boolean = false
   option?: ModelControlOption
 
-  constructor({ scene, coreNodeFinder, camera, materialType, option }: ModelControlParams) {
+  constructor({ scene, coreNodeFinder, materialType, option }: ModelControlParams) {
     this.scene = scene
-    this.camera = camera
     this.coreNodeFinder = coreNodeFinder
     this.models = getCoreModels(scene, this.coreNodeFinder)
     this.models.forEach(({ uuid }) => (this.originMaterials[uuid] = {}))
     this.materialType = materialType
+    option?.mirrorAxis && (this.mirrorAxis = option?.mirrorAxis)
     this.option = option
 
     this.changeModel(this.currentModelIndex)
@@ -40,16 +40,17 @@ export default class ModelControl {
   }
 
   mirror() {
-    if (Math.abs(this.camera.up.x) > 0) {
-      this.scene.scale.setZ(-this.scene.scale.z)
-    }
+    switch (this.mirrorAxis) {
+      case 'x':
+        this.scene.scale.setX(-this.scene.scale.x)
+        break
 
-    if (Math.abs(this.camera.up.y) > 0) {
-      this.scene.scale.setX(-this.scene.scale.x)
-    }
+      case 'y':
+        this.scene.scale.setY(-this.scene.scale.y)
+        break
 
-    if (Math.abs(this.camera.up.z) > 0) {
-      this.scene.scale.setY(-this.scene.scale.y)
+      case 'z':
+        this.scene.scale.setZ(-this.scene.scale.z)
     }
 
     this.isMirror = !this.isMirror

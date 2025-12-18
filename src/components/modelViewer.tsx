@@ -102,7 +102,6 @@ const ModelViewer = React.forwardRef<HTMLCanvasElement, ModelViewerProps>(
         modelControlRef.current = new ModelControl({
           scene,
           coreNodeFinder,
-          camera: defaultCamera,
           materialType: modelSetting?.materialType,
           option: {
             defaultFixed: modelSetting?.defaultFixed,
@@ -110,6 +109,7 @@ const ModelViewer = React.forwardRef<HTMLCanvasElement, ModelViewerProps>(
             defaultScale: modelSetting?.defaultScale,
             materialOption: modelSetting?.materialOption,
             opaqueOtherModel: modelSetting?.opaqueOtherModel,
+            mirrorAxis: modelSetting?.mirrorAxis,
           },
         })
 
