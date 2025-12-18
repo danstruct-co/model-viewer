@@ -1,91 +1,93 @@
-import { type Object3D } from "three";
-import { cameraControlMode, cameraTargets } from "./mapper";
-import { CameraControlAction, CameraControlParams, CameraTarget, ControlMode } from "./types";
-import type CoreNodeFinder from "../../../coreNodeFinder/coreNodeFinder";
-import { getCoreModels } from "../utils";
+import { type Object3D } from 'three'
+import { cameraControlMode, cameraTargets } from './mapper'
+import { CameraControlAction, CameraControlParams, CameraTarget, ControlMode } from './types'
+import type CoreNodeFinder from '../../../coreNodeFinder/coreNodeFinder'
+import { getCoreModels } from '../utils'
 
 export default class CameraControl {
-  control?: CameraControlAction;
-  private params: CameraControlParams;
-  private currentControlMode: ControlMode = "rotate";
-  private currentTarget: CameraTarget = "model";
-  private models: Object3D[] = [];
-  private coreNodeFinder: CoreNodeFinder;
-  private coreNode?: Object3D;
+  control?: CameraControlAction
+  private params: CameraControlParams
+  private currentControlMode: ControlMode = 'rotate'
+  private currentTarget: CameraTarget = 'model'
+  private models: Object3D[] = []
+  private coreNodeFinder: CoreNodeFinder
+  private coreNode?: Object3D
 
   constructor(params: CameraControlParams) {
-    this.params = params;
-    this.coreNodeFinder = params.coreNodeFinder;
-    const { camera, option, orbitControl } = params;
+    this.params = params
+    this.coreNodeFinder = params.coreNodeFinder
+    const { camera, option, orbitControl } = params
 
-    this.models = getCoreModels(params.scene, this.coreNodeFinder);
-    this.setCoreNode(0);
+    this.models = getCoreModels(params.scene, this.coreNodeFinder)
+    this.setCoreNode(0)
 
-    this.setControlMode(option?.defaultControlMode ?? "rotate");
-    this.setDisableZoom(option?.disableZoom);
-    this.setTargetType(option?.defaultTarget ?? "model");
+    this.setControlMode(option?.defaultControlMode ?? 'rotate')
+    this.setDisableZoom(option?.disableZoom)
+    this.setTargetType(option?.defaultTarget ?? 'model')
 
-    camera.up = option?.up ?? camera.up;
-    orbitControl?.update();
+    camera.up = option?.up ?? camera.up
+    orbitControl?.update()
 
-    orbitControl?.addEventListener("start", () => {
-      this.control?.onStartControl();
-    });
-    orbitControl?.addEventListener("end", () => {
-      this.control?.onEndControl();
-    });
+    orbitControl?.addEventListener('start', () => {
+      this.control?.onStartControl()
+    })
+    orbitControl?.addEventListener('end', () => {
+      this.control?.onEndControl()
+    })
   }
 
   setControlMode(controlMode: ControlMode) {
     if (!this.params.orbitControl) {
-      return;
+      return
     }
 
-    this.params.orbitControl.mouseButtons = { LEFT: cameraControlMode[controlMode] };
-    this.currentControlMode = controlMode;
+    this.params.orbitControl.mouseButtons = { LEFT: cameraControlMode[controlMode] }
+    this.currentControlMode = controlMode
   }
 
   setDisableZoom(value?: boolean) {
     if (!this.params.orbitControl) {
-      return;
+      return
     }
 
-    this.params.orbitControl.enableZoom = !value;
+    this.params.orbitControl.enableZoom = !value
   }
 
   setTargetType(type: CameraTarget) {
-    this.control?.dispose();
-    this.control = cameraTargets[type]({ ...this.params, coreNode: this.coreNode });
-    this.control?.initialize();
-    this.currentTarget = type;
+    this.control?.dispose()
+    this.control = cameraTargets[type]({ ...this.params, coreNode: this.coreNode })
+    setTimeout(() => {
+      this.control?.initialize()
+      this.currentTarget = type
+    })
   }
 
   setCoreNode(index: number) {
     if (index >= this.models.length) {
-      return;
+      return
     }
 
-    this.coreNode = this.coreNodeFinder.find(this.models[index]);
+    this.coreNode = this.coreNodeFinder.find(this.models[index])
 
     if (!this.control) {
-      return;
+      return
     }
-    this.control.coreNode = this.coreNode;
+    this.control.coreNode = this.coreNode
   }
 
   resetPosition() {
-    this.control?.resetPosition();
+    this.control?.resetPosition()
   }
 
   updateOnFrame() {
-    this.control?.updateOnFrame();
+    this.control?.updateOnFrame()
   }
 
   get controlMode() {
-    return this.currentControlMode;
+    return this.currentControlMode
   }
 
   get cameraTarget() {
-    return this.currentTarget;
+    return this.currentTarget
   }
 }
