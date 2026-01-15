@@ -1,21 +1,21 @@
-import { Color, ColorRepresentation, DoubleSide, Mesh, PlaneGeometry, ShaderMaterial } from "three";
+import { Color, ColorRepresentation, DoubleSide, Mesh, PlaneGeometry, ShaderMaterial } from 'three'
 
 export interface InfiniteGridHelperOptions {
-  size1?: number;
-  size2?: number;
-  color?: ColorRepresentation;
-  distance?: number;
-  axes?: string;
+  size1?: number
+  size2?: number
+  color?: ColorRepresentation
+  distance?: number
+  axes?: string
 }
 
 export class InfiniteGridHelper extends Mesh {
   constructor(options: InfiniteGridHelperOptions = {}) {
-    const { size1 = 10, size2 = 100, color = "white", distance = 8000, axes = "xzy" } = options;
+    const { size1 = 10, size2 = 100, color = 'white', distance = 8000, axes = 'xzy' } = options
 
-    const colorObj = color instanceof Color ? color : new Color(color);
-    const planeAxes = axes.substr(0, 2);
+    const colorObj = color instanceof Color ? color : new Color(color)
+    const planeAxes = axes.substr(0, 2)
 
-    const geometry = new PlaneGeometry(2, 2, 1, 1);
+    const geometry = new PlaneGeometry(2, 2, 1, 1)
 
     const material = new ShaderMaterial({
       side: DoubleSide,
@@ -80,38 +80,35 @@ export class InfiniteGridHelper extends Mesh {
           if (gl_FragColor.a <= 0.01) discard; // Higher threshold to reduce noise
         }
       `,
-      extensions: {
-        derivatives: true,
-      },
-    });
+    })
 
-    super(geometry, material);
-    this.frustumCulled = false;
-    this.renderOrder = -1000;
+    super(geometry, material)
+    this.frustumCulled = false
+    this.renderOrder = -1000
   }
 
   updateSize1(size: number): void {
     if (this.material instanceof ShaderMaterial) {
-      this.material.uniforms.uSize1.value = size;
+      this.material.uniforms.uSize1.value = size
     }
   }
 
   updateSize2(size: number): void {
     if (this.material instanceof ShaderMaterial) {
-      this.material.uniforms.uSize2.value = size;
+      this.material.uniforms.uSize2.value = size
     }
   }
 
   updateColor(color: ColorRepresentation): void {
     if (this.material instanceof ShaderMaterial) {
-      const colorObj = color instanceof Color ? color : new Color(color);
-      this.material.uniforms.uColor.value = colorObj;
+      const colorObj = color instanceof Color ? color : new Color(color)
+      this.material.uniforms.uColor.value = colorObj
     }
   }
 
   updateDistance(distance: number): void {
     if (this.material instanceof ShaderMaterial) {
-      this.material.uniforms.uDistance.value = distance;
+      this.material.uniforms.uDistance.value = distance
     }
   }
 }

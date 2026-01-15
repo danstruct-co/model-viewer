@@ -188,8 +188,14 @@ const ModelViewer = React.forwardRef<HTMLCanvasElement, ModelViewerProps>(
             intensity={2.5}
             castShadow
             target-position={[0, 0, 0]}
-            shadow-mapSize-width={2048}
-            shadow-mapSize-height={2048}
+            shadow-mapSize-width={8192}
+            shadow-mapSize-height={8192}
+            shadow-camera-left={-25}
+            shadow-camera-right={25}
+            shadow-camera-top={25}
+            shadow-camera-bottom={-25}
+            shadow-camera-near={0.1}
+            shadow-camera-far={200}
           />
           <ambientLight position={[5, 5, 4]} intensity={1.0} />
           <Sky
