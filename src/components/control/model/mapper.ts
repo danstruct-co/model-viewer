@@ -7,7 +7,13 @@ import rimLightEffect from './effect/rimLightEffect'
 import { SaturatedToonMaterial } from './SaturatedToonMaterial'
 
 export const materials: Record<MaterialType, (origin: MeshStandardMaterial) => Material> = {
-  DEFAULT: (origin) => origin,
+  DEFAULT: (origin) => {
+    const clone = origin.clone()
+    clone.setValues({
+      depthWrite: true,
+    })
+    return clone
+  },
   FABRIC: (origin) => {
     const clone = origin.clone()
     clone.setValues({
@@ -15,6 +21,7 @@ export const materials: Record<MaterialType, (origin: MeshStandardMaterial) => M
       roughness: 0.5,
       vertexColors: false,
       transparent: false,
+      depthWrite: true,
     })
     return clone
   },
@@ -25,6 +32,7 @@ export const materials: Record<MaterialType, (origin: MeshStandardMaterial) => M
       roughness: 0,
       vertexColors: false,
       transparent: false,
+      depthWrite: true,
     })
     return clone
   },

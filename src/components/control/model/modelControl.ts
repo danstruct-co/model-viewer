@@ -1,4 +1,4 @@
-import { MeshStandardMaterial, Object3D, SkinnedMesh, Vector3, type Camera, type Mesh } from 'three'
+import { MeshStandardMaterial, Object3D, SkinnedMesh, Vector3, type Mesh } from 'three'
 import { ModelControlParams, type Axis, type MaterialType, type ModelControlOption } from './types'
 import { effects, materials } from './mapper'
 import type CoreNodeFinder from '../../../coreNodeFinder/coreNodeFinder'
