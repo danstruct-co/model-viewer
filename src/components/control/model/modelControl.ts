@@ -18,12 +18,14 @@ export default class ModelControl {
   private mirrorAxis: Axis = 'x'
   isFixed: boolean = false
   option?: ModelControlOption
+  private modelRadii: Record<string, number> = {}
 
   constructor({ scene, coreNodeFinder, materialType, option }: ModelControlParams) {
     this.scene = scene
     this.coreNodeFinder = coreNodeFinder
     this.models = getCoreModels(scene, this.coreNodeFinder)
     this.models.forEach(({ uuid }) => (this.originMaterials[uuid] = {}))
+    this.modelRadii = this.computeModelRadii()
     this.materialType = materialType
     option?.mirrorAxis && (this.mirrorAxis = option?.mirrorAxis)
     this.option = option
@@ -109,6 +111,25 @@ export default class ModelControl {
     this.initialNodes()
   }
 
+  private computeModelRadii(): Record<string, number> {
+    const radii: Record<string, number> = {}
+    this.models.forEach(({ uuid }) => (radii[uuid] = 0))
+
+    this.scene.traverse((node) => {
+      const mesh = node as Mesh
+      if (!mesh.isMesh || !mesh.geometry) return
+
+      const model = this.findModel((mesh as SkinnedMesh).skeleton?.bones?.at(0) ?? mesh)
+      if (!model) return
+
+      mesh.geometry.computeBoundingSphere()
+      const radius = mesh.geometry.boundingSphere?.radius ?? 0
+      if (radius > radii[model.uuid]) radii[model.uuid] = radius
+    })
+
+    return radii
+  }
+
   private initialNodes() {
     this.scene.traverse((node) => {
       this.initialNode(node)
@@ -142,8 +163,10 @@ export default class ModelControl {
       mesh.material = this.model?.uuid === model.uuid ? mesh.material : materials.TRANSPARENT(mesh.material as MeshStandardMaterial)
     }
 
+    const modelRadius = model ? this.modelRadii[model.uuid] : undefined
+    const effectOption = { ...this.option?.materialOption, modelRadius }
     availableEffects.forEach(({ remove }) => remove(mesh))
-    effects[materialType].forEach(({ add }) => add(mesh, this.option?.materialOption))
+    effects[materialType].forEach(({ add }) => add(mesh, effectOption))
   }
 
   private applyMaterial(mesh: Mesh, model: Object3D | undefined) {

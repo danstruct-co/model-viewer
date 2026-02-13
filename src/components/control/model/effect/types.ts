@@ -2,6 +2,7 @@ import type { Mesh } from 'three'
 
 export type MaterialEffectOption = {
   thickness?: number
+  modelRadius?: number
 }
 
 export interface Effect {

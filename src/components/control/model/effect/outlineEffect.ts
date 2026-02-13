@@ -8,7 +8,10 @@ const outlineEffect: Effect = {
       return
     }
 
-    const outlineMesh = new OutlineMesh(mesh, option?.thickness || 0.002)
+    const modelRadius = option?.modelRadius || 1
+    const normalizedThickness = (option?.thickness || 0.002) * modelRadius
+
+    const outlineMesh = new OutlineMesh(mesh, normalizedThickness)
 
     mesh.add(outlineMesh)
     mesh.userData.hasOutline = true
