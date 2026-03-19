@@ -34,6 +34,17 @@ export default class ModelControl {
 
     option?.defaultMirrorMode && this.mirror()
     this.isFixed = !!option?.defaultFixed
+
+    if (option?.autoFit && !option?.defaultScale) {
+      const radius = this.getModelRadius()
+      if (radius > 0) {
+        const currentScale = this.scene.scale.x
+        const visualRadius = radius * Math.abs(currentScale)
+        const targetVisualRadius = 86.5
+        const newScale = currentScale * (targetVisualRadius / visualRadius)
+        this.setScale(new Vector3(newScale, newScale, newScale))
+      }
+    }
     option?.defaultScale && this.setScale(option.defaultScale)
   }
 
@@ -189,6 +200,11 @@ export default class ModelControl {
 
     const targetModel = this.models.find(({ uuid }) => uuid === object.parent?.uuid)
     return targetModel ?? this.findModel(object.parent)
+  }
+
+  getModelRadius(index = 0): number {
+    const model = this.models[index]
+    return model ? this.modelRadii[model.uuid] ?? 0 : 0
   }
 
   updateOnFrame() {

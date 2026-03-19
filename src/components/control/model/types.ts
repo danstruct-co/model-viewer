@@ -17,6 +17,7 @@ export type ModelControlOption = {
   materialOption?: MaterialOption
   opaqueOtherModel?: boolean
   mirrorAxis?: Axis
+  autoFit?: boolean
 }
 
 export type ModelControlParams = {

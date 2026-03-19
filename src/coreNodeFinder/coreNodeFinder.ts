@@ -60,12 +60,18 @@ export default class CoreNodeFinder {
     return hasCoreNode
   }
 
+  private normalize(name: string) {
+    return name.toLowerCase().replace(/[\s_]/g, '')
+  }
+
   private hasCoreNode(coreKeys: CoreKey[], node: { name: string }) {
     return coreKeys.some(({ name, constraint }) => {
+      const nodeName = this.normalize(node.name)
+      const keyName = this.normalize(name)
       if (constraint === 'INCLUDES') {
-        return node.name.toLowerCase().includes(name)
+        return nodeName.includes(keyName)
       } else {
-        return node.name.toLowerCase() === name
+        return nodeName === keyName
       }
     })
   }

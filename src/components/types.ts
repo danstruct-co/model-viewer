@@ -51,6 +51,7 @@ export type ModelViewerProps = {
     materialOption?: MaterialOption
     opaqueOtherModel?: boolean
     mirrorAxis?: Axis
+    autoFit?: boolean
   }
   /**
    * 환경 기본 설정
