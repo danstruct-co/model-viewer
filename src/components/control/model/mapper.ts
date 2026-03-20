@@ -48,8 +48,11 @@ export const materials: Record<MaterialType, (origin: MeshStandardMaterial) => M
     return clone
   },
   CARTOON: (origin) => {
+    const hsl = { h: 0, s: 0, l: 0 }
+    const color = origin.color.getHSL(hsl).s > 0.01 ? origin.color : new Color(1.1, 1.1, 1.1)
+
     return new SaturatedToonMaterial({
-      color: new Color(1.1, 1.1, 1.1),
+      color,
       emissive: new Color(0.1, 0.1, 0.1),
       emissiveIntensity: 0.3,
       map: origin.map,

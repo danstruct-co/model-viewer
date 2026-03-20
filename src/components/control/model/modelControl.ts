@@ -1,4 +1,4 @@
-import { MeshStandardMaterial, Object3D, SkinnedMesh, Vector3, type Mesh } from 'three'
+import { Box3, MeshStandardMaterial, Object3D, SkinnedMesh, Vector3, type Mesh } from 'three'
 import { ModelControlParams, type Axis, type MaterialType, type ModelControlOption } from './types'
 import { effects, materials } from './mapper'
 import type CoreNodeFinder from '../../../coreNodeFinder/coreNodeFinder'
@@ -36,12 +36,14 @@ export default class ModelControl {
     this.isFixed = !!option?.defaultFixed
 
     if (option?.autoFit && !option?.defaultScale) {
-      const radius = this.getModelRadius()
-      if (radius > 0) {
-        const currentScale = this.scene.scale.x
-        const visualRadius = radius * Math.abs(currentScale)
-        const targetVisualRadius = 86.5
-        const newScale = currentScale * (targetVisualRadius / visualRadius)
+      const box = new Box3().setFromObject(this.scene)
+      const size = new Vector3()
+      box.getSize(size)
+      const targetHeight = 1.64
+      if (size.y > 0) {
+        const scaleFactor = targetHeight / size.y
+        const current = this.scene.scale.x
+        const newScale = current * scaleFactor
         this.setScale(new Vector3(newScale, newScale, newScale))
       }
     }
@@ -200,11 +202,6 @@ export default class ModelControl {
 
     const targetModel = this.models.find(({ uuid }) => uuid === object.parent?.uuid)
     return targetModel ?? this.findModel(object.parent)
-  }
-
-  getModelRadius(index = 0): number {
-    const model = this.models[index]
-    return model ? this.modelRadii[model.uuid] ?? 0 : 0
   }
 
   updateOnFrame() {
