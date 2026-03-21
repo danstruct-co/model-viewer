@@ -36,6 +36,7 @@ export default class ModelControl {
     this.isFixed = !!option?.defaultFixed
 
     if (option?.autoFit && !option?.defaultScale) {
+      this.scene.updateWorldMatrix(true, true)
       const box = new Box3().setFromObject(this.scene)
       const size = new Vector3()
       box.getSize(size)
