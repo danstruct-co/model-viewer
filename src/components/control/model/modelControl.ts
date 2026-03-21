@@ -196,10 +196,26 @@ export default class ModelControl {
     return targetModel ?? this.findModel(object.parent)
   }
 
+  private computeGeometryBoundingBox(): Box3 {
+    this.scene.updateMatrixWorld(true)
+    const box = new Box3()
+    this.scene.traverse((node) => {
+      const mesh = node as Mesh
+      if (!mesh.isMesh || !mesh.geometry) return
+      if (!mesh.geometry.boundingBox) {
+        mesh.geometry.computeBoundingBox()
+      }
+      const meshBox = mesh.geometry.boundingBox!.clone()
+      meshBox.applyMatrix4(mesh.matrixWorld)
+      box.union(meshBox)
+    })
+    return box
+  }
+
   updateOnFrame() {
     if (this.autoFitPending) {
       this.autoFitPending = false
-      const box = new Box3().setFromObject(this.scene)
+      const box = this.computeGeometryBoundingBox()
       const size = new Vector3()
       box.getSize(size)
       const targetHeight = 1.64
