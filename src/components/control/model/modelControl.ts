@@ -19,6 +19,7 @@ export default class ModelControl {
   isFixed: boolean = false
   option?: ModelControlOption
   private modelRadii: Record<string, number> = {}
+  private autoFitPending: boolean = false
 
   constructor({ scene, coreNodeFinder, materialType, option }: ModelControlParams) {
     this.scene = scene
@@ -36,17 +37,7 @@ export default class ModelControl {
     this.isFixed = !!option?.defaultFixed
 
     if (option?.autoFit && !option?.defaultScale) {
-      this.scene.updateWorldMatrix(true, true)
-      const box = new Box3().setFromObject(this.scene)
-      const size = new Vector3()
-      box.getSize(size)
-      const targetHeight = 1.64
-      if (size.y > 0) {
-        const scaleFactor = targetHeight / size.y
-        const current = this.scene.scale.x
-        const newScale = current * scaleFactor
-        this.setScale(new Vector3(newScale, newScale, newScale))
-      }
+      this.autoFitPending = true
     }
     option?.defaultScale && this.setScale(option.defaultScale)
   }
@@ -206,6 +197,20 @@ export default class ModelControl {
   }
 
   updateOnFrame() {
+    if (this.autoFitPending) {
+      this.autoFitPending = false
+      const box = new Box3().setFromObject(this.scene)
+      const size = new Vector3()
+      box.getSize(size)
+      const targetHeight = 1.64
+      if (size.y > 0) {
+        const scaleFactor = targetHeight / size.y
+        const current = this.scene.scale.x
+        const newScale = current * scaleFactor
+        this.setScale(new Vector3(newScale, newScale, newScale))
+      }
+    }
+
     if (!this.isFixed) {
       return
     }
