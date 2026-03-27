@@ -4,9 +4,13 @@ import { defaultCoreKeys, exceptCoreKeys } from './data'
 
 export default class CoreNodeFinder {
   private coreKeys: CoreKey[] = [...defaultCoreKeys]
+  private hasCustomCoreKeys: boolean = false
 
   constructor({ nodes, actions, coreKeys }: CoreNodeFinderParams) {
-    coreKeys && (this.coreKeys = coreKeys)
+    if (coreKeys) {
+      this.coreKeys = coreKeys
+      this.hasCustomCoreKeys = true
+    }
     Object.entries(nodes).forEach(([key, node]) => (node.name = key))
     this.registerAnimationKeys(actions)
   }
@@ -50,7 +54,16 @@ export default class CoreNodeFinder {
   }
 
   private checkCoreNode(node: Object3D) {
-    return this.hasCoreNode(this.coreKeys, node) && (node as Bone).isBone
+    const nameMatch = this.hasCoreNode(this.coreKeys, node)
+
+    // 커스텀 coreKeys가 제공된 경우, 이름 매칭만으로 충분
+    // (사용자가 명시적으로 bone 이름을 지정했으므로 isBone 체크 불필요)
+    if (this.hasCustomCoreKeys) {
+      return nameMatch
+    }
+
+    // 기본 coreKeys를 사용하는 경우, isBone 체크 필수
+    return nameMatch && (node as Bone).isBone
   }
 
   hasDefaultCoreNode(object: Object3D) {
