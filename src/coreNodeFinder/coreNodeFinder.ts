@@ -74,7 +74,10 @@ export default class CoreNodeFinder {
   }
 
   private normalize(name: string) {
-    return name.toLowerCase().replace(/[\s_]/g, '')
+    return name
+      .replace(/\s/g, '_')
+      .replace(/[^\w-]/g, '')
+      .toLowerCase()
   }
 
   private hasCoreNode(coreKeys: CoreKey[], node: { name: string }) {
