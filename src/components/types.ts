@@ -52,6 +52,7 @@ export type ModelViewerProps = {
     opaqueOtherModel?: boolean
     mirrorAxis?: Axis
     autoFit?: boolean
+    defaultSkeletonHelper?: boolean
   }
   /**
    * 환경 기본 설정

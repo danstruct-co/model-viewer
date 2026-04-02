@@ -1,4 +1,5 @@
 import { Box3, MeshStandardMaterial, Object3D, SkinnedMesh, Vector3, type Mesh } from 'three'
+import CustomSkeletonHelper from './customSkeletonHelper'
 import { ModelControlParams, type Axis, type MaterialType, type ModelControlOption } from './types'
 import { effects, materials } from './mapper'
 import type CoreNodeFinder from '../../../coreNodeFinder/coreNodeFinder'
@@ -20,6 +21,8 @@ export default class ModelControl {
   option?: ModelControlOption
   private modelRadii: Record<string, number> = {}
   private autoFitPending: boolean = false
+  private skeletonHelper?: CustomSkeletonHelper
+  private isSkeletonHelper: boolean = false
 
   constructor({ scene, coreNodeFinder, materialType, option }: ModelControlParams) {
     this.scene = scene
@@ -40,6 +43,7 @@ export default class ModelControl {
       this.autoFitPending = true
     }
     option?.defaultScale && this.setScale(option.defaultScale)
+    option?.defaultSkeletonHelper && this.setSkeletonHelperActive(true)
   }
 
   setScale({ x, y, z }: Vector3) {
@@ -210,6 +214,31 @@ export default class ModelControl {
       box.union(meshBox)
     })
     return box
+  }
+
+  get skeletonHelperActive() {
+    return this.isSkeletonHelper
+  }
+
+  setSkeletonHelperActive(isActive: boolean) {
+    this.removeSkeletonHelper()
+    if (!isActive) return
+
+    this.skeletonHelper = new CustomSkeletonHelper(this.scene)
+    // SkeletonHelper는 내부적으로 this.matrix = root.matrixWorld를 참조하므로
+    // root의 자식이 아닌 부모 씬에 추가해야 트랜스폼 이중 적용을 방지
+    const parentScene = this.scene.parent ?? this.scene
+    parentScene.add(this.skeletonHelper)
+    this.isSkeletonHelper = true
+  }
+
+  private removeSkeletonHelper() {
+    if (this.skeletonHelper) {
+      this.skeletonHelper.parent?.remove(this.skeletonHelper)
+      this.skeletonHelper.geometry.dispose()
+      this.skeletonHelper = undefined
+    }
+    this.isSkeletonHelper = false
   }
 
   updateOnFrame() {

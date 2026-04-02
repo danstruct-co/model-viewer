@@ -13,6 +13,7 @@ export type Axis = 'x' | 'y' | 'z'
 export type ModelControlOption = {
   defaultMirrorMode?: boolean
   defaultFixed?: boolean
+  defaultSkeletonHelper?: boolean
   defaultScale?: Vector3
   materialOption?: MaterialOption
   opaqueOtherModel?: boolean
