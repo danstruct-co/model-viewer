@@ -12,7 +12,9 @@ export default class CoreNodeFinder {
       this.hasCustomCoreKeys = true
     }
     Object.entries(nodes).forEach(([key, node]) => (node.name = key))
-    this.registerAnimationKeys(actions)
+    if (!this.hasCustomCoreKeys) {
+      this.registerAnimationKeys(actions)
+    }
   }
 
   private registerAnimationKeys(actions: Record<string, AnimationAction | null>) {
