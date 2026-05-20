@@ -178,7 +178,7 @@ const ModelViewer = React.forwardRef<HTMLCanvasElement, ModelViewerProps>(
 
       return (
         <group>
-          <Environment preset="city" />
+          <Environment files="/hdri/potsdamer_platz_1k.hdr" />
           <primitive object={scene} />
           <SoftShadows size={5} samples={40} focus={-20} />
           <mesh position={[0, -0.1, 0]} rotation={[-Math.PI / 2, 0, 0]}>
