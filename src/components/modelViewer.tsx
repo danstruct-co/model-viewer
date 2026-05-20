@@ -190,8 +190,8 @@ const ModelViewer = React.forwardRef<HTMLCanvasElement, ModelViewerProps>(
             intensity={2.5}
             castShadow
             target-position={[0, 0, 0]}
-            shadow-mapSize-width={8192}
-            shadow-mapSize-height={8192}
+            shadow-mapSize-width={4096}
+            shadow-mapSize-height={4096}
             shadow-camera-left={-25}
             shadow-camera-right={25}
             shadow-camera-top={25}
@@ -225,7 +225,7 @@ const ModelViewer = React.forwardRef<HTMLCanvasElement, ModelViewerProps>(
               shadows={{ enabled: true, type: PCFSoftShadowMap }}
               camera={{ fov: 20 }}
               gl={{ antialias: true, powerPreference: 'high-performance', alpha: true, stencil: true, depth: true, preserveDrawingBuffer: false }}
-              dpr={window.devicePixelRatio}
+              dpr={Math.min(window.devicePixelRatio, 2)}
             >
               {model}
               <color ref={backgroundColorRef} attach="background" />
