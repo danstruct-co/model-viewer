@@ -61,15 +61,16 @@ export default class CameraControl {
   setTargetType(type: CameraTarget, keepCamera = false) {
     this.control?.dispose()
     this.control = cameraTargets[type]({ ...this.params, coreNode: this.coreNode })
+    // cameraTarget(현재 상태)은 즉시 반영 — setTimeout 안에서 갱신하면 전환 직후
+    // 상태를 읽는 소비자(패널 토글 라이브 표시 등)가 이전 값을 본다
+    this.currentTarget = type
     if (keepCamera) {
       // 드래그로 follow 를 끄는 전환 등 — 리셋 스냅 없이 현재 카메라 그대로 이어간다
       ;(this.control as { skipInitialReset?: () => void }).skipInitialReset?.()
-      this.currentTarget = type
       return
     }
     setTimeout(() => {
       this.control?.initialize()
-      this.currentTarget = type
     })
   }
 
