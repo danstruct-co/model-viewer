@@ -34,6 +34,8 @@ export type ModelViewerProps = {
     up?: Vector3
     /** 표준 마우스 바인딩: 좌드래그 회전 + 우드래그 팬 + 휠 줌 (미지정 시 기존 좌버튼 단일 모드) */
     standardMouse?: boolean
+    /** 캐릭터 키 기준 카메라 구도 (타깃 Y=키×0.55·오프셋 키 비례, follow 는 수평만 추적) */
+    heightFit?: boolean
   }
   /**
    * 애니메이션 기본 설정

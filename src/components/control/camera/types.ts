@@ -33,5 +33,7 @@ export type CameraControlParams = {
     up?: Vector3
     /** 표준 마우스 바인딩: 좌드래그 회전 + 우드래그 팬 + 휠 줌 */
     standardMouse?: boolean
+    /** 캐릭터 키 기준 구도: 타깃 Y=키×0.55, 오프셋 키 비례 — MMD 센터(바닥 피벗) 대응 */
+    heightFit?: boolean
   }
 }
