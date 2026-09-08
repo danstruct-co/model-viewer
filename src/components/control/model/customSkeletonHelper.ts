@@ -21,13 +21,17 @@ const _vector = new Vector3()
 const _head = new Vector3()
 const _tail = new Vector3()
 const _dir = new Vector3()
+const _refAxis = new Vector3()
+const _basisX = new Vector3()
+const _basisZ = new Vector3()
 const _boneScale = new Vector3()
 const _scale = new Vector3()
 const _quat = new Quaternion()
+const _rotMatrix = new Matrix4()
 const _boneMatrix = new Matrix4()
+const _parentMatrix = new Matrix4()
 const _instanceMatrix = new Matrix4()
 const _matrixWorldInv = new Matrix4()
-const _UP = new Vector3(0, 1, 0)
 
 // 관절 구 표시 (종원 2026-09-08 확정): config body 본에만 초록 구 — 미매핑 본은 그리지 않음
 const JOINT_RADIUS = 0.012 // 월드 m — 루트 스케일(autoFit 등) 역보정으로 상수 크기 유지
@@ -171,18 +175,35 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
     }
     _matrixWorldInv.copy(this.root.matrixWorld).invert()
 
-    // octahedral 본: 헤드 = 허용 조상 관절, 테일 = 본 관절 — 헤드에 놓고 +Y 를 방향으로 회전,
-    // 스케일 = (굵기, 길이, 굵기). 길이 0 본은 스케일 0 으로 자연 소멸
+    // octahedral 본: 헤드 = 허용 조상 관절, 테일 = 본 관절 — 헤드에 놓고 Y축을 방향에 정렬.
+    // 롤(축 회전)은 방향만으로는 정의 불가 — setFromUnitVectors 는 하향 본(허벅지)에서 180°
+    // 특이점 근처라 프레임마다 빙빙 돈다(종원 제보 2026-09-08). 부모 관절 world 회전의 X축을
+    // 롤 기준으로 삼아 안정 프레임을 만든다(부모가 트위스트하면 본도 따라 도는 Blender 감).
     if (this.boneMesh) {
       for (let i = 0; i < this.filteredPairs.length; i++) {
         const [bone, parent] = this.filteredPairs[i]
         _boneMatrix.multiplyMatrices(_matrixWorldInv, bone.matrixWorld)
         _tail.setFromMatrixPosition(_boneMatrix)
-        _boneMatrix.multiplyMatrices(_matrixWorldInv, parent.matrixWorld)
-        _head.setFromMatrixPosition(_boneMatrix)
+        _parentMatrix.multiplyMatrices(_matrixWorldInv, parent.matrixWorld)
+        _head.setFromMatrixPosition(_parentMatrix)
         _dir.subVectors(_tail, _head)
         const length = _dir.length()
-        _quat.setFromUnitVectors(_UP, length > 1e-8 ? _dir.normalize() : _UP)
+        if (length > 1e-8) {
+          _dir.normalize()
+          _refAxis.setFromMatrixColumn(_parentMatrix, 0)
+          _basisZ.crossVectors(_refAxis, _dir)
+          if (_basisZ.lengthSq() < 1e-6) {
+            // 롤 기준축이 본 방향과 평행 — 부모 Z축으로 폴백
+            _refAxis.setFromMatrixColumn(_parentMatrix, 2)
+            _basisZ.crossVectors(_refAxis, _dir)
+          }
+          _basisZ.normalize()
+          _basisX.crossVectors(_dir, _basisZ).normalize()
+          _rotMatrix.makeBasis(_basisX, _dir, _basisZ)
+          _quat.setFromRotationMatrix(_rotMatrix)
+        } else {
+          _quat.identity()
+        }
         const width = length * BONE_WIDTH_RATIO
         _boneScale.set(width, length, width)
         _instanceMatrix.compose(_head, _quat, _boneScale)
