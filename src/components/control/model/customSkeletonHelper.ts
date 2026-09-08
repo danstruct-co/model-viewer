@@ -2,12 +2,15 @@ import {
   Bone,
   BufferGeometry,
   Color,
+  DoubleSide,
   Float32BufferAttribute,
   InstancedMesh,
   Matrix4,
   MeshBasicMaterial,
+  MeshLambertMaterial,
   Object3D,
   PropertyBinding,
+  Quaternion,
   SkeletonHelper,
   SkinnedMesh,
   SphereGeometry,
@@ -15,17 +18,51 @@ import {
 } from 'three'
 
 const _vector = new Vector3()
+const _head = new Vector3()
+const _tail = new Vector3()
+const _dir = new Vector3()
+const _boneScale = new Vector3()
 const _scale = new Vector3()
+const _quat = new Quaternion()
 const _boneMatrix = new Matrix4()
 const _instanceMatrix = new Matrix4()
 const _matrixWorldInv = new Matrix4()
+const _UP = new Vector3(0, 1, 0)
 
-// 관절 구 표시 (종원 2026-09-08 확정): config body 본에만 초록 구 — 미매핑 본은 라인도 구도 없음
+// 관절 구 표시 (종원 2026-09-08 확정): config body 본에만 초록 구 — 미매핑 본은 그리지 않음
 const JOINT_RADIUS = 0.012 // 월드 m — 루트 스케일(autoFit 등) 역보정으로 상수 크기 유지
 const JOINT_COLOR = new Color(0x22cc44)
-// 라인 색: 바디 = 파랑→초록(three SkeletonHelper 관례) / 손가락 = 주황 계열(구분용, 구 없음)
-const BODY_LINE_COLORS: [Color, Color] = [new Color(0, 0, 1), new Color(0, 1, 0)]
-const FINGER_LINE_COLORS: [Color, Color] = [new Color(0xff6600), new Color(0xffcc66)]
+// 본 형태 = Blender 식 octahedral (사각뿔 2개 — 링이 헤드 쪽 10% 지점, 종원 2026-09-08).
+// 굵기는 본 길이 비례. 색: 바디 = 파랑 / 손가락 = 주황 (Lambert 셰이딩으로 면 구분)
+const BONE_RING_RATIO = 0.1
+const BONE_WIDTH_RATIO = 0.12
+const BODY_BONE_COLOR = new Color(0x3377dd)
+const FINGER_BONE_COLOR = new Color(0xdd7722)
+
+/** 단위 octahedral 본 (+Y 축, 헤드 0 → 테일 1, 링 y=0.1·반폭 1) — 인스턴스 스케일로 변형 */
+function createOctahedralBoneGeometry() {
+  const h = [0, 0, 0]
+  const t = [0, 1, 0]
+  const r = BONE_RING_RATIO
+  const ring = [
+    [1, r, 0],
+    [0, r, 1],
+    [-1, r, 0],
+    [0, r, -1],
+  ]
+  const faces: number[][][] = []
+  for (let i = 0; i < 4; i++) {
+    const a = ring[i]
+    const b = ring[(i + 1) % 4]
+    faces.push([h, b, a]) // 헤드 쪽 뿔
+    faces.push([t, a, b]) // 테일 쪽 뿔
+  }
+  const positions = faces.flat(2)
+  const geometry = new BufferGeometry()
+  geometry.setAttribute('position', new Float32BufferAttribute(positions, 3))
+  geometry.computeVertexNormals() // 비인덱스 — 면 단위 플랫 노멀
+  return geometry
+}
 
 export type SkeletonBoneFilter = {
   body: string[]
@@ -41,14 +78,15 @@ export type SkeletonBoneFilter = {
  * SkeletonHelper가 빈 geometry를 생성하는 문제를 해결함.
  *
  * filter(옵션, 종원 2026-09-08): 지정 본만 그린다 — 각 본을 **최근접 허용 조상**과 직결
- * (미매핑 중간 본은 라인·구 모두 생략). body 본은 관절 초록 구 + 파랑→초록 라인,
- * fingers 본은 주황 라인만.
- * (중간 본 경유+노랑 구 버전은 실험 후 종원 지시로 철회 — 이 파일 이력 참조)
+ * (미매핑 중간 본은 생략). 본 형태 = Blender 식 octahedral 메시(굵기 길이 비례),
+ * body = 파랑 본 + 관절 초록 구 / fingers = 주황 본(구 없음).
+ * (라인 버전·중간 본 경유+노랑 구 버전은 실험 후 종원 지시로 교체/철회 — 파일 이력 참조)
  */
 export default class CustomSkeletonHelper extends SkeletonHelper {
   private filteredPairs?: [Bone, Bone][]
   private jointMesh?: InstancedMesh
   private jointBones?: Bone[]
+  private boneMesh?: InstancedMesh
 
   constructor(root: Object3D, filter?: SkeletonBoneFilter) {
     restoreBoneFlags(root)
@@ -81,19 +119,31 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
     }
     if (pairs.length === 0) return
 
-    const geometry = new BufferGeometry()
-    const vertices: number[] = []
-    const colors: number[] = []
-    for (let i = 0; i < pairs.length; i++) {
-      const [color1, color2] = pairIsFinger[i] ? FINGER_LINE_COLORS : BODY_LINE_COLORS
-      vertices.push(0, 0, 0, 0, 0, 0)
-      colors.push(color1.r, color1.g, color1.b, color2.r, color2.g, color2.b)
-    }
-    geometry.setAttribute('position', new Float32BufferAttribute(vertices, 3))
-    geometry.setAttribute('color', new Float32BufferAttribute(colors, 3))
+    // 필터 모드는 본을 octahedral 메시로 그림 — 베이스 라인 지오메트리는 비운다
     this.geometry.dispose()
-    this.geometry = geometry
+    this.geometry = new BufferGeometry()
+    this.geometry.setAttribute('position', new Float32BufferAttribute([], 3))
     this.filteredPairs = pairs
+
+    const bones = new InstancedMesh(
+      createOctahedralBoneGeometry(),
+      new MeshLambertMaterial({
+        depthTest: false,
+        depthWrite: false,
+        transparent: true,
+        opacity: 0.95,
+        toneMapped: false,
+        side: DoubleSide,
+      }),
+      pairs.length
+    )
+    for (let i = 0; i < pairs.length; i++) {
+      bones.setColorAt(i, pairIsFinger[i] ? FINGER_BONE_COLOR : BODY_BONE_COLOR)
+    }
+    bones.frustumCulled = false
+    bones.renderOrder = this.renderOrder + 1
+    this.add(bones)
+    this.boneMesh = bones
 
     // 관절 구 (InstancedMesh 1개, 초록 단색) — body 매핑 본에만 (손가락은 구 없음)
     const joint = new InstancedMesh(
@@ -108,7 +158,7 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
       bodyBones.length
     )
     joint.frustumCulled = false
-    joint.renderOrder = this.renderOrder + 1
+    joint.renderOrder = this.renderOrder + 2 // 본 메시 위에 구 표시
     this.add(joint)
     this.jointMesh = joint
     this.jointBones = bodyBones
@@ -119,20 +169,27 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
       super.updateMatrixWorld(force)
       return
     }
-    // three SkeletonHelper.updateMatrixWorld 와 동일 산식 — 본 목록만 필터 쌍으로 대체
-    const position = this.geometry.getAttribute('position')
     _matrixWorldInv.copy(this.root.matrixWorld).invert()
-    let j = 0
-    for (const [bone, parent] of this.filteredPairs) {
-      _boneMatrix.multiplyMatrices(_matrixWorldInv, bone.matrixWorld)
-      _vector.setFromMatrixPosition(_boneMatrix)
-      position.setXYZ(j, _vector.x, _vector.y, _vector.z)
-      _boneMatrix.multiplyMatrices(_matrixWorldInv, parent.matrixWorld)
-      _vector.setFromMatrixPosition(_boneMatrix)
-      position.setXYZ(j + 1, _vector.x, _vector.y, _vector.z)
-      j += 2
+
+    // octahedral 본: 헤드 = 허용 조상 관절, 테일 = 본 관절 — 헤드에 놓고 +Y 를 방향으로 회전,
+    // 스케일 = (굵기, 길이, 굵기). 길이 0 본은 스케일 0 으로 자연 소멸
+    if (this.boneMesh) {
+      for (let i = 0; i < this.filteredPairs.length; i++) {
+        const [bone, parent] = this.filteredPairs[i]
+        _boneMatrix.multiplyMatrices(_matrixWorldInv, bone.matrixWorld)
+        _tail.setFromMatrixPosition(_boneMatrix)
+        _boneMatrix.multiplyMatrices(_matrixWorldInv, parent.matrixWorld)
+        _head.setFromMatrixPosition(_boneMatrix)
+        _dir.subVectors(_tail, _head)
+        const length = _dir.length()
+        _quat.setFromUnitVectors(_UP, length > 1e-8 ? _dir.normalize() : _UP)
+        const width = length * BONE_WIDTH_RATIO
+        _boneScale.set(width, length, width)
+        _instanceMatrix.compose(_head, _quat, _boneScale)
+        this.boneMesh.setMatrixAt(i, _instanceMatrix)
+      }
+      this.boneMesh.instanceMatrix.needsUpdate = true
     }
-    position.needsUpdate = true
 
     if (this.jointMesh && this.jointBones) {
       // 헬퍼 좌표계는 root.matrixWorld — 루트 스케일(autoFit·cm 릭 0.01 등)을 역보정해
@@ -156,6 +213,11 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
       this.jointMesh.geometry.dispose()
       ;(this.jointMesh.material as MeshBasicMaterial).dispose()
       this.jointMesh.dispose()
+    }
+    if (this.boneMesh) {
+      this.boneMesh.geometry.dispose()
+      ;(this.boneMesh.material as MeshLambertMaterial).dispose()
+      this.boneMesh.dispose()
     }
   }
 }
