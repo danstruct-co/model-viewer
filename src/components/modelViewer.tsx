@@ -1,6 +1,7 @@
 'use client'
 
-import { Environment, GizmoHelper, GizmoViewport, OrbitControls, Sky, SoftShadows, useAnimations } from '@react-three/drei'
+import { Environment, GizmoHelper, OrbitControls, Sky, SoftShadows, useAnimations } from '@react-three/drei'
+import { AxisGizmoViewport } from './axisGizmoViewport'
 import { Canvas, useFrame, useLoader, useThree } from '@react-three/fiber'
 import React, { Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { Color, MeshStandardMaterial, PCFSoftShadowMap, Vector3 } from 'three'
@@ -205,8 +206,7 @@ const ModelViewer = React.forwardRef<HTMLCanvasElement, ModelViewerProps>(
               }}
               onUpdate={() => orbitControlRef.current?.update()}
             >
-              {/* GizmoViewport 루트 기본 스케일 = 40 (덮어쓰기 주의 — 0.8 줬다가 점 크기 실측) */}
-              <GizmoViewport labelColor="white" axisHeadScale={1} scale={32} />
+              <AxisGizmoViewport />
             </GizmoHelper>
           )}
           <directionalLight
