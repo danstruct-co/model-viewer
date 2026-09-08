@@ -62,13 +62,43 @@ const _ikEffLocal = new Vector3()
 const _ikTgtLocal = new Vector3()
 const _ikQuat = new Quaternion()
 
-function solveCCD(endBone: Bone, targetWorld: Vector3) {
+/** IK 체인 수집 — 엔드의 조상 Bone 최대 IK_CHAIN_LEN 개 (엔드에서 가까운 순) */
+function collectIKChain(endBone: Bone): Bone[] {
   const chain: Bone[] = []
   let p: Object3D | null = endBone.parent
   while (p && (p as Bone).isBone && chain.length < IK_CHAIN_LEN) {
     chain.push(p as Bone)
     p = p.parent
   }
+  return chain
+}
+
+const _reachA = new Vector3()
+const _reachB = new Vector3()
+
+/** 타겟을 체인 도달 반경으로 클램프 — 한계 밖으로 드래그해도 기즈모가 더 안 나간다
+ *  (종원 2026-09-08). 반경 = 체인 루트 관절 기준 링크 길이 합 (×0.999 — 완전 신전 특이점 회피) */
+function clampTargetToReach(endBone: Bone, target: Vector3) {
+  const chain = collectIKChain(endBone)
+  if (chain.length === 0) return
+  const nodes = [...chain].reverse() // 루트 관절부터
+  nodes.push(endBone)
+  let reach = 0
+  for (let i = 0; i + 1 < nodes.length; i++) {
+    _reachA.setFromMatrixPosition(nodes[i].matrixWorld)
+    _reachB.setFromMatrixPosition(nodes[i + 1].matrixWorld)
+    reach += _reachA.distanceTo(_reachB)
+  }
+  _reachA.setFromMatrixPosition(nodes[0].matrixWorld) // 체인 루트 관절 (IK 로 위치 불변)
+  _reachB.subVectors(target, _reachA)
+  const maxDist = reach * 0.999
+  if (_reachB.length() > maxDist) {
+    target.copy(_reachB.normalize().multiplyScalar(maxDist).add(_reachA))
+  }
+}
+
+function solveCCD(endBone: Bone, targetWorld: Vector3) {
+  const chain = collectIKChain(endBone)
   if (chain.length === 0) return
   for (let iter = 0; iter < IK_ITERATIONS; iter++) {
     for (const joint of chain) {
@@ -287,10 +317,11 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
     })
   }
 
-  /** IK 타겟 설정 (월드 절대) — 축 드래그 소비자용. 설정 즉시 홀드 시작 */
+  /** IK 타겟 설정 (월드 절대) — 축 드래그 소비자용. 체인 도달 반경으로 클램프 후 홀드 */
   setTargetWorld(target: Vector3) {
     if (!this.targetWorld) this.targetWorld = new Vector3()
     this.targetWorld.copy(target)
+    if (this.highlightBone) clampTargetToReach(this.highlightBone, this.targetWorld)
   }
 
   /** IK 타겟 해제 — 재생 재개·선택 변경 시. 포즈는 다음 mixer 적용에서 원복 */
