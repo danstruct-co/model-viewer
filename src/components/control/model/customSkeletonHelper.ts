@@ -1,12 +1,13 @@
 import {
+  AxesHelper,
   Bone,
   BufferGeometry,
   Color,
   DoubleSide,
   Float32BufferAttribute,
   InstancedMesh,
+  LineBasicMaterial,
   Matrix4,
-  Mesh,
   MeshBasicMaterial,
   MeshLambertMaterial,
   Object3D,
@@ -37,10 +38,9 @@ const _matrixWorldInv = new Matrix4()
 // 관절 구 표시 (종원 2026-09-08 확정): config body 본에만 초록 구 — 미매핑 본은 그리지 않음
 const JOINT_RADIUS = 0.012 // 월드 m — 루트 스케일(autoFit 등) 역보정으로 상수 크기 유지
 const JOINT_COLOR = new Color(0x22cc44)
-// 선택 관절 하이라이트 (종원 2026-09-08): 릭 선택 UI 의 선택 테두리와 동일 문법 —
-// 초록 구를 감싸는 반투명 빨간 halo 구 (파랑 → 빨강, 종원 지시)
-const HIGHLIGHT_COLOR = new Color(0xff0000) // 순수 R255 쨍한 빨강 (종원 2026-09-08)
-const HIGHLIGHT_RADIUS_RATIO = 2.6
+// 선택 관절 하이라이트 (종원 2026-09-08 확정): 월드 정렬 XYZ 축 기즈모(AxesHelper —
+// X빨/Y초/Z파). 빨간 halo 구 버전은 철회 — git 이력 참조
+const HIGHLIGHT_AXES_RATIO = 6.0 // 축 길이 = JOINT_RADIUS × 6
 const JOINT_HOVER_SCALE = 2.0 // 관절 호버 확대 배율 (피킹 옵트인)
 // 본 형태 = Blender 식 octahedral (사각뿔 2개 — 링이 헤드 쪽 10% 지점, 종원 2026-09-08).
 // 굵기는 본 길이 비례. 색: 바디 = 파랑 / 손가락 = 주황 (Lambert 셰이딩으로 면 구분)
@@ -98,7 +98,7 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
   private jointBones?: Bone[]
   private boneMesh?: InstancedMesh
   private highlightBone?: Bone
-  private highlightMesh?: Mesh
+  private highlightGizmo?: AxesHelper
   private hoverIndex: number | null = null
 
   constructor(root: Object3D, filter?: SkeletonBoneFilter) {
@@ -195,33 +195,28 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
   setHighlightBone(name: string | null) {
     if (!name) {
       this.highlightBone = undefined
-      if (this.highlightMesh) this.highlightMesh.visible = false
+      if (this.highlightGizmo) this.highlightGizmo.visible = false
       return
     }
     const candidates = toNameSet([name])
     this.highlightBone = this.bones.find((bone) => candidates.has(bone.name))
     if (!this.highlightBone) {
-      if (this.highlightMesh) this.highlightMesh.visible = false
+      if (this.highlightGizmo) this.highlightGizmo.visible = false
       return
     }
-    if (!this.highlightMesh) {
-      const mesh = new Mesh(
-        new SphereGeometry(1, 12, 10),
-        new MeshBasicMaterial({
-          color: HIGHLIGHT_COLOR,
-          transparent: true,
-          opacity: 0.75,
-          depthTest: false,
-          depthWrite: false,
-          toneMapped: false,
-        })
-      )
-      mesh.frustumCulled = false
-      mesh.renderOrder = this.renderOrder + 3 // 관절 구 위
-      this.add(mesh)
-      this.highlightMesh = mesh
+    if (!this.highlightGizmo) {
+      const gizmo = new AxesHelper(1)
+      const mat = gizmo.material as LineBasicMaterial
+      mat.depthTest = false
+      mat.depthWrite = false
+      mat.transparent = true
+      mat.toneMapped = false
+      gizmo.frustumCulled = false
+      gizmo.renderOrder = this.renderOrder + 3 // 관절 구 위
+      this.add(gizmo)
+      this.highlightGizmo = gizmo
     }
-    this.highlightMesh.visible = true
+    this.highlightGizmo.visible = true
   }
 
   updateMatrixWorld(force?: boolean) {
@@ -283,13 +278,16 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
       this.jointMesh.instanceMatrix.needsUpdate = true
     }
 
-    if (this.highlightMesh && this.highlightBone && this.highlightMesh.visible) {
+    if (this.highlightGizmo && this.highlightBone && this.highlightGizmo.visible) {
+      // 헬퍼 좌표계가 root 회전·스케일을 물려주므로 역보정 — 축이 항상 **월드 정렬** 유지
       _scale.setFromMatrixScale(this.root.matrixWorld)
-      const hs = (JOINT_RADIUS * HIGHLIGHT_RADIUS_RATIO) / (Math.abs(_scale.x) || 1)
+      const hs = (JOINT_RADIUS * HIGHLIGHT_AXES_RATIO) / (Math.abs(_scale.x) || 1)
       _boneMatrix.multiplyMatrices(_matrixWorldInv, this.highlightBone.matrixWorld)
       _vector.setFromMatrixPosition(_boneMatrix)
-      this.highlightMesh.position.copy(_vector)
-      this.highlightMesh.scale.setScalar(hs)
+      _rotMatrix.extractRotation(this.root.matrixWorld)
+      this.highlightGizmo.quaternion.setFromRotationMatrix(_rotMatrix).invert()
+      this.highlightGizmo.position.copy(_vector)
+      this.highlightGizmo.scale.setScalar(hs)
     }
     Object3D.prototype.updateMatrixWorld.call(this, force)
   }
@@ -306,9 +304,8 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
       ;(this.boneMesh.material as MeshLambertMaterial).dispose()
       this.boneMesh.dispose()
     }
-    if (this.highlightMesh) {
-      this.highlightMesh.geometry.dispose()
-      ;(this.highlightMesh.material as MeshBasicMaterial).dispose()
+    if (this.highlightGizmo) {
+      this.highlightGizmo.dispose() // geometry + material
     }
   }
 }
