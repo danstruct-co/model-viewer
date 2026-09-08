@@ -31,5 +31,7 @@ export type CameraControlParams = {
     defaultPosition?: Vector3
     disableZoom?: boolean
     up?: Vector3
+    /** 표준 마우스 바인딩: 좌드래그 회전 + 우드래그 팬 + 휠 줌 */
+    standardMouse?: boolean
   }
 }

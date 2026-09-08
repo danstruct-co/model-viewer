@@ -32,6 +32,8 @@ export type ModelViewerProps = {
     defaultTarget?: CameraTarget
     disableZoom?: boolean
     up?: Vector3
+    /** 표준 마우스 바인딩: 좌드래그 회전 + 우드래그 팬 + 휠 줌 (미지정 시 기존 좌버튼 단일 모드) */
+    standardMouse?: boolean
   }
   /**
    * 애니메이션 기본 설정

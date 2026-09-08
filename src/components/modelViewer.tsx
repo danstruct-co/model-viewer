@@ -144,6 +144,7 @@ const ModelViewer = React.forwardRef<HTMLCanvasElement, ModelViewerProps>(
             defaultPosition: cameraSetting?.defaultPosition,
             disableZoom: cameraSetting?.disableZoom,
             up: cameraSetting?.up,
+            standardMouse: cameraSetting?.standardMouse,
           },
         })
 

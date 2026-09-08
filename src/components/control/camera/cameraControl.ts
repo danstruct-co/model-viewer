@@ -1,4 +1,4 @@
-import { type Object3D } from 'three'
+import { MOUSE, type Object3D } from 'three'
 import { cameraControlMode, cameraTargets } from './mapper'
 import { CameraControlAction, CameraControlParams, CameraTarget, ControlMode } from './types'
 import type CoreNodeFinder from '../../../coreNodeFinder/coreNodeFinder'
@@ -41,7 +41,11 @@ export default class CameraControl {
       return
     }
 
-    this.params.orbitControl.mouseButtons = { LEFT: cameraControlMode[controlMode] }
+    // standardMouse(옵트인): 좌버튼 모드에 더해 우드래그 팬·휠 줌을 상시 바인딩 —
+    // 컨트롤 모드 라디오 UI 없이 마우스만으로 회전/팬/줌 (스튜디오 2026-09-08)
+    this.params.orbitControl.mouseButtons = this.params.option?.standardMouse
+      ? { LEFT: cameraControlMode[controlMode], MIDDLE: MOUSE.DOLLY, RIGHT: MOUSE.PAN }
+      : { LEFT: cameraControlMode[controlMode] }
     this.currentControlMode = controlMode
   }
 
