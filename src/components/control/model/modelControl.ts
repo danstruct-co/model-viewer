@@ -236,6 +236,7 @@ export default class ModelControl {
     if (this.skeletonHelper) {
       this.skeletonHelper.parent?.remove(this.skeletonHelper)
       this.skeletonHelper.geometry.dispose()
+      this.skeletonHelper.dispose() // 필터 모드 관절 구 리소스
       this.skeletonHelper = undefined
     }
     this.isSkeletonHelper = false

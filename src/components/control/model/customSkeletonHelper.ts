@@ -3,17 +3,26 @@ import {
   BufferGeometry,
   Color,
   Float32BufferAttribute,
+  InstancedMesh,
   Matrix4,
+  MeshBasicMaterial,
   Object3D,
   PropertyBinding,
   SkeletonHelper,
   SkinnedMesh,
+  SphereGeometry,
   Vector3,
 } from 'three'
 
 const _vector = new Vector3()
+const _scale = new Vector3()
 const _boneMatrix = new Matrix4()
+const _instanceMatrix = new Matrix4()
 const _matrixWorldInv = new Matrix4()
+
+// 관절 구 표시 (종원 2026-09-08 확정): config body 본에만 초록 구 — 미매핑 본은 라인도 구도 없음
+const JOINT_RADIUS = 0.012 // 월드 m — 루트 스케일(autoFit 등) 역보정으로 상수 크기 유지
+const JOINT_COLOR = new Color(0x22cc44)
 
 /**
  * GLB 변환 과정에서 isBone 플래그가 사라진 노드를 복원한 뒤 SkeletonHelper를 생성하는 커스텀 클래스
@@ -22,11 +31,14 @@ const _matrixWorldInv = new Matrix4()
  * SkinnedMesh가 없는 모델(애니메이션만 있는 경우)에서는 모든 본이 Object3D로 로드되어
  * SkeletonHelper가 빈 geometry를 생성하는 문제를 해결함.
  *
- * boneNames 필터(옵션): 지정한 본만 표시 — 각 본을 **최근접 허용 조상**과 직결해
- * 미매핑 중간 본(MMD 肩P·손가락 등)을 건너뛴 바디 골격만 그린다 (종원 2026-09-08).
+ * boneNames 필터(옵션, 종원 2026-09-08): 지정 본만 그린다 — 각 본을 **최근접 허용 조상**과
+ * 직결(미매핑 중간 본은 라인·구 모두 생략), 관절마다 초록 구 표시.
+ * (중간 본 경유+노랑 구 버전은 실험 후 종원 지시로 철회 — 이 파일 이력 참조)
  */
 export default class CustomSkeletonHelper extends SkeletonHelper {
   private filteredPairs?: [Bone, Bone][]
+  private jointMesh?: InstancedMesh
+  private jointBones?: Bone[]
 
   constructor(root: Object3D, boneNames?: string[]) {
     restoreBoneFlags(root)
@@ -45,14 +57,17 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
 
   private applyBoneFilter(nameSet: Set<string>) {
     const allowed = this.bones.filter((bone) => nameSet.has(bone.name))
+    if (allowed.length === 0) return // 이름이 하나도 안 맞으면 전체 표시 유지 (필터 오폭 방지)
     const allowedSet = new Set<Object3D>(allowed)
+
+    // 세그먼트 = 허용 본 → 최근접 허용 조상 직결 (중간 미매핑 본은 그리지 않음)
     const pairs: [Bone, Bone][] = []
     for (const bone of allowed) {
       let parent: Object3D | null = bone.parent
       while (parent && !allowedSet.has(parent)) parent = parent.parent
       if (parent) pairs.push([bone, parent as Bone])
     }
-    if (pairs.length === 0) return // 이름이 하나도 안 맞으면 전체 표시 유지 (필터 오폭 방지)
+    if (pairs.length === 0) return
 
     const geometry = new BufferGeometry()
     const vertices: number[] = []
@@ -68,6 +83,24 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
     this.geometry.dispose()
     this.geometry = geometry
     this.filteredPairs = pairs
+
+    // 관절 구 (InstancedMesh 1개, 초록 단색) — config 매핑 본에만
+    const joint = new InstancedMesh(
+      new SphereGeometry(1, 10, 8),
+      new MeshBasicMaterial({
+        color: JOINT_COLOR,
+        depthTest: false,
+        depthWrite: false,
+        transparent: true,
+        toneMapped: false,
+      }),
+      allowed.length
+    )
+    joint.frustumCulled = false
+    joint.renderOrder = this.renderOrder + 1
+    this.add(joint)
+    this.jointMesh = joint
+    this.jointBones = allowed
   }
 
   updateMatrixWorld(force?: boolean) {
@@ -89,7 +122,30 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
       j += 2
     }
     position.needsUpdate = true
+
+    if (this.jointMesh && this.jointBones) {
+      // 헬퍼 좌표계는 root.matrixWorld — 루트 스케일(autoFit·cm 릭 0.01 등)을 역보정해
+      // 구가 화면상 상수 크기(JOINT_RADIUS m)를 유지하게 한다
+      _scale.setFromMatrixScale(this.root.matrixWorld)
+      const s = JOINT_RADIUS / (Math.abs(_scale.x) || 1)
+      for (let i = 0; i < this.jointBones.length; i++) {
+        _boneMatrix.multiplyMatrices(_matrixWorldInv, this.jointBones[i].matrixWorld)
+        _vector.setFromMatrixPosition(_boneMatrix)
+        _instanceMatrix.makeScale(s, s, s).setPosition(_vector)
+        this.jointMesh.setMatrixAt(i, _instanceMatrix)
+      }
+      this.jointMesh.instanceMatrix.needsUpdate = true
+    }
     Object3D.prototype.updateMatrixWorld.call(this, force)
+  }
+
+  /** 필터 모드 부속 리소스 해제 (라인 geometry 는 modelControl 이 dispose) */
+  dispose() {
+    if (this.jointMesh) {
+      this.jointMesh.geometry.dispose()
+      ;(this.jointMesh.material as MeshBasicMaterial).dispose()
+      this.jointMesh.dispose()
+    }
   }
 }
 
