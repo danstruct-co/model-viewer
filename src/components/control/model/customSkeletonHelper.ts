@@ -23,6 +23,15 @@ const _matrixWorldInv = new Matrix4()
 // 관절 구 표시 (종원 2026-09-08 확정): config body 본에만 초록 구 — 미매핑 본은 라인도 구도 없음
 const JOINT_RADIUS = 0.012 // 월드 m — 루트 스케일(autoFit 등) 역보정으로 상수 크기 유지
 const JOINT_COLOR = new Color(0x22cc44)
+// 라인 색: 바디 = 파랑→초록(three SkeletonHelper 관례) / 손가락 = 주황 계열(구분용, 구 없음)
+const BODY_LINE_COLORS: [Color, Color] = [new Color(0, 0, 1), new Color(0, 1, 0)]
+const FINGER_LINE_COLORS: [Color, Color] = [new Color(0xff6600), new Color(0xffcc66)]
+
+export type SkeletonBoneFilter = {
+  body: string[]
+  /** 손가락 본 — 라인만 다른 색으로 표시, 관절 구 없음 (종원 2026-09-08) */
+  fingers?: string[]
+}
 
 /**
  * GLB 변환 과정에서 isBone 플래그가 사라진 노드를 복원한 뒤 SkeletonHelper를 생성하는 커스텀 클래스
@@ -31,8 +40,9 @@ const JOINT_COLOR = new Color(0x22cc44)
  * SkinnedMesh가 없는 모델(애니메이션만 있는 경우)에서는 모든 본이 Object3D로 로드되어
  * SkeletonHelper가 빈 geometry를 생성하는 문제를 해결함.
  *
- * boneNames 필터(옵션, 종원 2026-09-08): 지정 본만 그린다 — 각 본을 **최근접 허용 조상**과
- * 직결(미매핑 중간 본은 라인·구 모두 생략), 관절마다 초록 구 표시.
+ * filter(옵션, 종원 2026-09-08): 지정 본만 그린다 — 각 본을 **최근접 허용 조상**과 직결
+ * (미매핑 중간 본은 라인·구 모두 생략). body 본은 관절 초록 구 + 파랑→초록 라인,
+ * fingers 본은 주황 라인만.
  * (중간 본 경유+노랑 구 버전은 실험 후 종원 지시로 철회 — 이 파일 이력 참조)
  */
 export default class CustomSkeletonHelper extends SkeletonHelper {
@@ -40,41 +50,42 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
   private jointMesh?: InstancedMesh
   private jointBones?: Bone[]
 
-  constructor(root: Object3D, boneNames?: string[]) {
+  constructor(root: Object3D, filter?: SkeletonBoneFilter) {
     restoreBoneFlags(root)
     super(root)
-    if (boneNames?.length) {
+    if (filter?.body?.length) {
       // GLTFLoader 는 노드명을 PropertyBinding.sanitizeNodeName 으로 정규화한다
       // ('腕.L'→'腕L' — 닷 제거 실측 2026-09-08). 필터명도 원문+정규화 양쪽으로 매칭.
-      const nameSet = new Set<string>()
-      for (const name of boneNames) {
-        nameSet.add(name)
-        nameSet.add(PropertyBinding.sanitizeNodeName(name))
-      }
-      this.applyBoneFilter(nameSet)
+      this.applyBoneFilter(toNameSet(filter.body), toNameSet(filter.fingers ?? []))
     }
   }
 
-  private applyBoneFilter(nameSet: Set<string>) {
-    const allowed = this.bones.filter((bone) => nameSet.has(bone.name))
-    if (allowed.length === 0) return // 이름이 하나도 안 맞으면 전체 표시 유지 (필터 오폭 방지)
-    const allowedSet = new Set<Object3D>(allowed)
+  private applyBoneFilter(bodySet: Set<string>, fingerSet: Set<string>) {
+    const bodyBones = this.bones.filter((bone) => bodySet.has(bone.name))
+    if (bodyBones.length === 0) return // 이름이 하나도 안 맞으면 전체 표시 유지 (필터 오폭 방지)
+    const fingerBones = this.bones.filter((bone) => fingerSet.has(bone.name))
+    const allowedSet = new Set<Object3D>([...bodyBones, ...fingerBones])
+    const fingerBoneSet = new Set<Object3D>(fingerBones)
 
-    // 세그먼트 = 허용 본 → 최근접 허용 조상 직결 (중간 미매핑 본은 그리지 않음)
+    // 세그먼트 = 허용 본 → 최근접 허용 조상 직결 (미매핑 중간 본은 그리지 않음).
+    // 색 그룹은 자식 본 기준 — 손가락 루트→손목(body) 세그먼트도 손가락 색.
     const pairs: [Bone, Bone][] = []
-    for (const bone of allowed) {
+    const pairIsFinger: boolean[] = []
+    for (const bone of [...bodyBones, ...fingerBones]) {
       let parent: Object3D | null = bone.parent
       while (parent && !allowedSet.has(parent)) parent = parent.parent
-      if (parent) pairs.push([bone, parent as Bone])
+      if (parent) {
+        pairs.push([bone, parent as Bone])
+        pairIsFinger.push(fingerBoneSet.has(bone))
+      }
     }
     if (pairs.length === 0) return
 
     const geometry = new BufferGeometry()
     const vertices: number[] = []
     const colors: number[] = []
-    const color1 = new Color(0, 0, 1)
-    const color2 = new Color(0, 1, 0)
     for (let i = 0; i < pairs.length; i++) {
+      const [color1, color2] = pairIsFinger[i] ? FINGER_LINE_COLORS : BODY_LINE_COLORS
       vertices.push(0, 0, 0, 0, 0, 0)
       colors.push(color1.r, color1.g, color1.b, color2.r, color2.g, color2.b)
     }
@@ -84,7 +95,7 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
     this.geometry = geometry
     this.filteredPairs = pairs
 
-    // 관절 구 (InstancedMesh 1개, 초록 단색) — config 매핑 본에만
+    // 관절 구 (InstancedMesh 1개, 초록 단색) — body 매핑 본에만 (손가락은 구 없음)
     const joint = new InstancedMesh(
       new SphereGeometry(1, 10, 8),
       new MeshBasicMaterial({
@@ -94,13 +105,13 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
         transparent: true,
         toneMapped: false,
       }),
-      allowed.length
+      bodyBones.length
     )
     joint.frustumCulled = false
     joint.renderOrder = this.renderOrder + 1
     this.add(joint)
     this.jointMesh = joint
-    this.jointBones = allowed
+    this.jointBones = bodyBones
   }
 
   updateMatrixWorld(force?: boolean) {
@@ -147,6 +158,15 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
       this.jointMesh.dispose()
     }
   }
+}
+
+function toNameSet(names: string[]) {
+  const set = new Set<string>()
+  for (const name of names) {
+    set.add(name)
+    set.add(PropertyBinding.sanitizeNodeName(name))
+  }
+  return set
 }
 
 function restoreBoneFlags(root: Object3D) {

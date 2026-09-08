@@ -1,6 +1,7 @@
 import type CoreNodeFinder from '../../../coreNodeFinder/coreNodeFinder'
 import { Group, Object3DEventMap, type Camera, type Vector3 } from 'three'
 import type { MaterialEffectOption } from './effect/types'
+import type { SkeletonBoneFilter } from './customSkeletonHelper'
 
 export type MaterialType = 'DEFAULT' | 'FABRIC' | 'METALIC' | 'TRANSPARENT' | 'CARTOON'
 
@@ -19,8 +20,8 @@ export type ModelControlOption = {
   opaqueOtherModel?: boolean
   mirrorAxis?: Axis
   autoFit?: boolean
-  /** 스켈레톤 헬퍼에 표시할 본 이름 목록 — 미지정 시 전체 본 표시 */
-  skeletonFilter?: string[]
+  /** 스켈레톤 헬퍼 표시 본 필터 (body 구+라인 / fingers 라인만) — 미지정 시 전체 본 표시 */
+  skeletonFilter?: SkeletonBoneFilter
 }
 
 export type ModelControlParams = {
