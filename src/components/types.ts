@@ -36,6 +36,8 @@ export type ModelViewerProps = {
     standardMouse?: boolean
     /** 캐릭터 키 기준 카메라 구도 (타깃 Y=키×0.55·오프셋 키 비례, follow 는 수평만 추적) */
     heightFit?: boolean
+    /** 우상단 월드 좌표축 기즈모 (Blender 식 — 축 클릭 시 해당 방향 뷰로 전환) */
+    axisGizmo?: boolean
   }
   /**
    * 애니메이션 기본 설정

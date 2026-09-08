@@ -1,9 +1,9 @@
 'use client'
 
-import { Environment, OrbitControls, Sky, SoftShadows, useAnimations } from '@react-three/drei'
+import { Environment, GizmoHelper, GizmoViewport, OrbitControls, Sky, SoftShadows, useAnimations } from '@react-three/drei'
 import { Canvas, useFrame, useLoader, useThree } from '@react-three/fiber'
 import React, { Suspense, useEffect, useMemo, useRef, useState } from 'react'
-import { Color, MeshStandardMaterial, PCFSoftShadowMap } from 'three'
+import { Color, MeshStandardMaterial, PCFSoftShadowMap, Vector3 } from 'three'
 import AnimationControl from './control/animation/animationControl'
 import { OrbitControls as OrbitControlsImpl, Sky as SkyImpl } from 'three-stdlib'
 import CameraControl from './control/camera/cameraControl'
@@ -188,6 +188,18 @@ const ModelViewer = React.forwardRef<HTMLCanvasElement, ModelViewerProps>(
             <meshStandardMaterial ref={groundRef} attach="material" color="white" />
           </mesh>
           <OrbitControls ref={orbitControlRef} maxDistance={30} />
+          {cameraSetting?.axisGizmo && (
+            /* 월드 좌표축 기즈모 (Blender 식, 종원 2026-09-08): 축 클릭 시 현재 피벗(오빗
+               타깃) 기준 그 방향에서 보는 뷰로 트윈 — 거리는 현재 줌 유지 */
+            <GizmoHelper
+              alignment="top-right"
+              margin={[70, 70]}
+              onTarget={() => orbitControlRef.current?.target ?? new Vector3()}
+              onUpdate={() => orbitControlRef.current?.update()}
+            >
+              <GizmoViewport labelColor="white" axisHeadScale={1} />
+            </GizmoHelper>
+          )}
           <directionalLight
             position={[3, 5, 4]}
             intensity={2.5}
