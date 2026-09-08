@@ -37,10 +37,11 @@ const _matrixWorldInv = new Matrix4()
 // 관절 구 표시 (종원 2026-09-08 확정): config body 본에만 초록 구 — 미매핑 본은 그리지 않음
 const JOINT_RADIUS = 0.012 // 월드 m — 루트 스케일(autoFit 등) 역보정으로 상수 크기 유지
 const JOINT_COLOR = new Color(0x22cc44)
-// 선택 관절 하이라이트 (종원 2026-09-08): 릭 선택 UI 의 파란 테두리와 동일 문법 —
-// 초록 구를 감싸는 반투명 파란 halo 구
-const HIGHLIGHT_COLOR = new Color(0x1bddff)
+// 선택 관절 하이라이트 (종원 2026-09-08): 릭 선택 UI 의 선택 테두리와 동일 문법 —
+// 초록 구를 감싸는 반투명 빨간 halo 구 (파랑 → 빨강, 종원 지시)
+const HIGHLIGHT_COLOR = new Color(0xef4444)
 const HIGHLIGHT_RADIUS_RATIO = 2.0
+const JOINT_HOVER_SCALE = 2.0 // 관절 호버 확대 배율 (피킹 옵트인)
 // 본 형태 = Blender 식 octahedral (사각뿔 2개 — 링이 헤드 쪽 10% 지점, 종원 2026-09-08).
 // 굵기는 본 길이 비례. 색: 바디 = 파랑 / 손가락 = 주황 (Lambert 셰이딩으로 면 구분)
 const BONE_RING_RATIO = 0.1
@@ -98,6 +99,7 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
   private boneMesh?: InstancedMesh
   private highlightBone?: Bone
   private highlightMesh?: Mesh
+  private hoverIndex: number | null = null
 
   constructor(root: Object3D, filter?: SkeletonBoneFilter) {
     restoreBoneFlags(root)
@@ -173,6 +175,19 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
     this.add(joint)
     this.jointMesh = joint
     this.jointBones = bodyBones
+  }
+
+  /** 관절 구 레이캐스트 피킹 — 맞은 관절의 본명/인덱스 (2026-09-08 릭 선택 연동) */
+  pickJoint(raycaster: import('three').Raycaster): { name: string; index: number } | null {
+    if (!this.jointMesh || !this.jointBones) return null
+    const hit = raycaster.intersectObject(this.jointMesh, false)[0]
+    if (hit?.instanceId == null) return null
+    return { name: this.jointBones[hit.instanceId].name, index: hit.instanceId }
+  }
+
+  /** 호버 관절 확대 표시 (2배) — null 이면 해제 */
+  setJointHover(index: number | null) {
+    this.hoverIndex = index
   }
 
   /** 선택 관절 하이라이트 — 릭 선택 UI 와 연동 (종원 2026-09-08). name null 이면 해제.
@@ -261,7 +276,8 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
       for (let i = 0; i < this.jointBones.length; i++) {
         _boneMatrix.multiplyMatrices(_matrixWorldInv, this.jointBones[i].matrixWorld)
         _vector.setFromMatrixPosition(_boneMatrix)
-        _instanceMatrix.makeScale(s, s, s).setPosition(_vector)
+        const js = i === this.hoverIndex ? s * JOINT_HOVER_SCALE : s
+        _instanceMatrix.makeScale(js, js, js).setPosition(_vector)
         this.jointMesh.setMatrixAt(i, _instanceMatrix)
       }
       this.jointMesh.instanceMatrix.needsUpdate = true

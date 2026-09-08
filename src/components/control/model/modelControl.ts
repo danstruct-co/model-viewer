@@ -241,6 +241,15 @@ export default class ModelControl {
     this.skeletonHelper?.setHighlightBone(name)
   }
 
+  /** 관절 구 피킹 (헬퍼 켜진 동안만 유효) — 뷰어 포인터 이벤트 소비자용 (2026-09-08) */
+  pickSkeletonJoint(raycaster: import('three').Raycaster) {
+    return this.skeletonHelper?.pickJoint(raycaster) ?? null
+  }
+
+  setSkeletonJointHover(index: number | null) {
+    this.skeletonHelper?.setJointHover(index)
+  }
+
   private removeSkeletonHelper() {
     if (this.skeletonHelper) {
       this.skeletonHelper.parent?.remove(this.skeletonHelper)

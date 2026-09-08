@@ -4,7 +4,7 @@ import { Environment, GizmoHelper, OrbitControls, Sky, SoftShadows, useAnimation
 import { AxisGizmoViewport } from './axisGizmoViewport'
 import { Canvas, useFrame, useLoader, useThree } from '@react-three/fiber'
 import React, { Suspense, useEffect, useMemo, useRef, useState } from 'react'
-import { Color, MeshStandardMaterial, PCFSoftShadowMap, Vector3 } from 'three'
+import { Color, MeshStandardMaterial, PCFSoftShadowMap, Raycaster, Vector2, Vector3 } from 'three'
 import AnimationControl from './control/animation/animationControl'
 import { OrbitControls as OrbitControlsImpl, Sky as SkyImpl } from 'three-stdlib'
 import CameraControl from './control/camera/cameraControl'
@@ -98,6 +98,47 @@ const ModelViewer = React.forwardRef<HTMLCanvasElement, ModelViewerProps>(
         cameraControlRef.current?.updateOnFrame()
         animationControlRef.current?.updateOnFrame()
       })
+
+      // 관절 구 피킹 옵트인 (2026-09-08): 스켈레톤 헬퍼가 켜진 동안 호버 = 구 2배 + 커서,
+      // 클릭(드래그와 구분 — 이동 5px 미만) = onJointPick(본명). 헬퍼 꺼짐이면 자동 무동작
+      useEffect(() => {
+        const onJointPick = modelSetting?.onJointPick
+        if (!onJointPick) return
+        const dom = gl.domElement
+        const raycaster = new Raycaster()
+        const pointer = new Vector2()
+        let downX = 0
+        let downY = 0
+        const cast = (e: PointerEvent) => {
+          const rect = dom.getBoundingClientRect()
+          pointer.set(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1)
+          raycaster.setFromCamera(pointer, defaultCamera)
+          return modelControlRef.current?.pickSkeletonJoint(raycaster) ?? null
+        }
+        const onMove = (e: PointerEvent) => {
+          const hit = cast(e)
+          modelControlRef.current?.setSkeletonJointHover(hit?.index ?? null)
+          dom.style.cursor = hit ? 'pointer' : ''
+        }
+        const onDown = (e: PointerEvent) => {
+          downX = e.clientX
+          downY = e.clientY
+        }
+        const onUp = (e: PointerEvent) => {
+          if (Math.hypot(e.clientX - downX, e.clientY - downY) >= 5) return
+          const hit = cast(e)
+          if (hit) onJointPick(hit.name)
+        }
+        dom.addEventListener('pointermove', onMove)
+        dom.addEventListener('pointerdown', onDown)
+        dom.addEventListener('pointerup', onUp)
+        return () => {
+          dom.removeEventListener('pointermove', onMove)
+          dom.removeEventListener('pointerdown', onDown)
+          dom.removeEventListener('pointerup', onUp)
+          dom.style.cursor = ''
+        }
+      }, [])
 
       const initializeModelControl = () => {
         modelControlRef.current = new ModelControl({
