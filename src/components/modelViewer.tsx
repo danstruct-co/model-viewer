@@ -187,17 +187,26 @@ const ModelViewer = React.forwardRef<HTMLCanvasElement, ModelViewerProps>(
           <mesh position={[0, -0.1, 0]} rotation={[-Math.PI / 2, 0, 0]}>
             <meshStandardMaterial ref={groundRef} attach="material" color="white" />
           </mesh>
-          <OrbitControls ref={orbitControlRef} maxDistance={30} />
+          {/* makeDefault: drei GizmoHelper 가 state.controls 를 요구 — 없으면 트윈 프레임마다
+              isOrbitControls(null) 크래시 (drei 9.102 실측). 다른 소비자는 없어 동작 동일 */}
+          <OrbitControls ref={orbitControlRef} makeDefault maxDistance={30} />
           {cameraSetting?.axisGizmo && (
-            /* 월드 좌표축 기즈모 (Blender 식, 종원 2026-09-08): 축 클릭 시 현재 피벗(오빗
-               타깃) 기준 그 방향에서 보는 뷰로 트윈 — 거리는 현재 줌 유지 */
+            /* 월드 좌표축 기즈모 (Blender 식, 종원 2026-09-08): 축 클릭 시 **리셋 카메라
+               기준점**(heightFit 타깃) 피벗으로 그 방향 뷰 트윈 — 거리는 현재 줌 유지.
+               비-makeDefault OrbitControls 라 피벗 갱신은 onTarget 에서 직접 수행 */
             <GizmoHelper
               alignment="top-right"
               margin={[70, 70]}
-              onTarget={() => orbitControlRef.current?.target ?? new Vector3()}
+              onTarget={() => {
+                const target =
+                  cameraControlRef.current?.getResetTarget() ?? orbitControlRef.current?.target ?? new Vector3()
+                orbitControlRef.current?.target.copy(target)
+                return target
+              }}
               onUpdate={() => orbitControlRef.current?.update()}
             >
-              <GizmoViewport labelColor="white" axisHeadScale={1} />
+              {/* GizmoViewport 루트 기본 스케일 = 40 (덮어쓰기 주의 — 0.8 줬다가 점 크기 실측) */}
+              <GizmoViewport labelColor="white" axisHeadScale={1} scale={32} />
             </GizmoHelper>
           )}
           <directionalLight

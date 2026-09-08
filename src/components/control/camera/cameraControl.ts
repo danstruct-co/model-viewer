@@ -1,5 +1,6 @@
 import { MOUSE, type Object3D } from 'three'
 import { cameraControlMode, cameraTargets } from './mapper'
+import { computeCameraFraming } from '../utils'
 import { CameraControlAction, CameraControlParams, CameraTarget, ControlMode } from './types'
 import type CoreNodeFinder from '../../../coreNodeFinder/coreNodeFinder'
 import { getCoreModels } from '../utils'
@@ -87,6 +88,11 @@ export default class CameraControl {
 
   resetPosition() {
     this.control?.resetPosition()
+  }
+
+  /** 리셋 카메라 구도의 기준점 — 축 기즈모 등 외부 피벗 소비자용 (follow/free 리셋과 동일 정의) */
+  getResetTarget() {
+    return computeCameraFraming(this.coreNode, this.params.scene, this.params.option?.heightFit ?? false)?.target ?? null
   }
 
   updateOnFrame() {

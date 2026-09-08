@@ -1,11 +1,8 @@
 import { Camera, Object3D, Vector3 } from "three";
 import { CameraControlParams } from "./types";
 import { OrbitControls } from "three-stdlib";
-import { computeModelBox } from "../utils";
+import { computeCameraFraming } from "../utils";
 
-// followCamera 와 동일한 heightFit 구도 상수 (리셋 구도 공유 — follow 여부만 다름)
-const REF_HEIGHT = 1.64;
-const TARGET_HEIGHT_RATIO = 0.55;
 
 export default class FreeCamera {
   defaultPosition: Vector3;
@@ -35,26 +32,13 @@ export default class FreeCamera {
   };
 
   resetPosition = () => {
-    const box = this.heightFit ? computeModelBox(this.scene) : undefined;
-    const height = box ? box.max.y - box.min.y : 0;
-    const hasBox = !!box && Number.isFinite(height) && height > 1e-3;
-    if (!this.coreNode && !hasBox) {
+    const framing = computeCameraFraming(this.coreNode, this.scene, this.heightFit);
+    if (!framing) {
       return; // 코어 본 미매칭 + bbox 불능 — 구도 기준이 없다
     }
 
-    const modelWorldPosition = new Vector3();
-    if (this.coreNode) {
-      this.coreNode.getWorldPosition(modelWorldPosition);
-    } else if (box) {
-      box.getCenter(modelWorldPosition); // heightFit 폴백: 본 매칭 실패 릭도 bbox 중심으로 프레이밍
-    }
-
-    const target = modelWorldPosition.clone();
-    const offset = this.defaultPosition.clone();
-    if (hasBox && box) {
-      target.y = box.min.y + height * TARGET_HEIGHT_RATIO;
-      offset.multiplyScalar(height / REF_HEIGHT);
-    }
+    const target = framing.target;
+    const offset = this.defaultPosition.clone().multiplyScalar(framing.heightScale);
 
     this.camera.position.copy(target).add(offset);
 

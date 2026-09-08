@@ -1,13 +1,8 @@
 import { Camera, Object3D, Vector3 } from "three";
 import { CameraControlParams } from "./types";
 import { OrbitControls } from "three-stdlib";
-import { computeModelBox } from "../utils";
+import { computeCameraFraming } from "../utils";
 
-// heightFit 구도 상수: REF_HEIGHT(1.64m — autoFit 표준 키)에서 기존 오프셋 (0,0.3,8) 구도와
-// 동일해지도록 키 비례 스케일. 타깃 높이 = 키의 55%(골반 부근) — MMD 센터처럼 hips 매핑
-// 본의 피벗이 바닥에 있어도 구도가 무너지지 않는다 (종원 2026-09-08).
-const REF_HEIGHT = 1.64;
-const TARGET_HEIGHT_RATIO = 0.55;
 
 export default class FollowCamera {
   defaultPosition: Vector3;
@@ -47,27 +42,18 @@ export default class FollowCamera {
   };
 
   resetPosition = () => {
-    const box = this.heightFit ? computeModelBox(this.scene) : undefined;
-    const height = box ? box.max.y - box.min.y : 0;
-    const hasBox = !!box && Number.isFinite(height) && height > 1e-3;
-    if (!this.coreNode && !hasBox) {
+    const framing = computeCameraFraming(this.coreNode, this.scene, this.heightFit);
+    if (!framing) {
       return; // 코어 본 미매칭 + bbox 불능 — 구도 기준이 없다
     }
-
-    const modelWorldPosition = new Vector3();
     if (this.coreNode) {
-      this.coreNode.getWorldPosition(modelWorldPosition);
-    } else if (box) {
-      box.getCenter(modelWorldPosition); // heightFit 폴백: 본 매칭 실패 릭도 bbox 중심으로 프레이밍
+      this.coreNode.getWorldPosition(this.lastModelPosition);
+    } else {
+      this.lastModelPosition.copy(framing.target);
     }
-    this.lastModelPosition.copy(modelWorldPosition);
 
-    const target = modelWorldPosition.clone();
-    const offset = this.defaultPosition.clone();
-    if (hasBox && box) {
-      target.y = box.min.y + height * TARGET_HEIGHT_RATIO;
-      offset.multiplyScalar(height / REF_HEIGHT);
-    }
+    const target = framing.target;
+    const offset = this.defaultPosition.clone().multiplyScalar(framing.heightScale);
 
     this.camera.position.copy(target).add(offset);
 
