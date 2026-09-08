@@ -57,6 +57,8 @@ export type ModelViewerProps = {
     mirrorAxis?: Axis
     autoFit?: boolean
     defaultSkeletonHelper?: boolean
+    /** 스켈레톤 헬퍼 표시 본 필터 (config 바디 본 등) — 미지정 시 전체 */
+    skeletonFilter?: string[]
   }
   /**
    * 환경 기본 설정

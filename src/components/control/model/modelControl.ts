@@ -224,7 +224,7 @@ export default class ModelControl {
     this.removeSkeletonHelper()
     if (!isActive) return
 
-    this.skeletonHelper = new CustomSkeletonHelper(this.scene)
+    this.skeletonHelper = new CustomSkeletonHelper(this.scene, this.option?.skeletonFilter)
     // SkeletonHelper는 내부적으로 this.matrix = root.matrixWorld를 참조하므로
     // root의 자식이 아닌 부모 씬에 추가해야 트랜스폼 이중 적용을 방지
     const parentScene = this.scene.parent ?? this.scene

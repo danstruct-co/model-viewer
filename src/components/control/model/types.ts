@@ -19,6 +19,8 @@ export type ModelControlOption = {
   opaqueOtherModel?: boolean
   mirrorAxis?: Axis
   autoFit?: boolean
+  /** 스켈레톤 헬퍼에 표시할 본 이름 목록 — 미지정 시 전체 본 표시 */
+  skeletonFilter?: string[]
 }
 
 export type ModelControlParams = {

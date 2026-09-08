@@ -112,6 +112,7 @@ const ModelViewer = React.forwardRef<HTMLCanvasElement, ModelViewerProps>(
             opaqueOtherModel: modelSetting?.opaqueOtherModel,
             mirrorAxis: modelSetting?.mirrorAxis,
             autoFit: modelSetting?.autoFit,
+            skeletonFilter: modelSetting?.skeletonFilter,
           },
         })
 
