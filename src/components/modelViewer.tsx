@@ -197,7 +197,7 @@ const ModelViewer = React.forwardRef<HTMLCanvasElement, ModelViewerProps>(
                비-makeDefault OrbitControls 라 피벗 갱신은 onTarget 에서 직접 수행 */
             <GizmoHelper
               alignment="top-right"
-              margin={[70, 70]}
+              margin={[50, 50]}
               onTarget={() => {
                 const target =
                   cameraControlRef.current?.getResetTarget() ?? orbitControlRef.current?.target ?? new Vector3()
