@@ -30,22 +30,25 @@ export default class FreeCamera {
   };
 
   resetPosition = () => {
-    if (!this.coreNode) {
-      return;
+    const box = this.heightFit ? computeModelBox(this.scene) : undefined;
+    const height = box ? box.max.y - box.min.y : 0;
+    const hasBox = !!box && Number.isFinite(height) && height > 1e-3;
+    if (!this.coreNode && !hasBox) {
+      return; // 코어 본 미매칭 + bbox 불능 — 구도 기준이 없다
     }
 
     const modelWorldPosition = new Vector3();
-    this.coreNode.getWorldPosition(modelWorldPosition);
+    if (this.coreNode) {
+      this.coreNode.getWorldPosition(modelWorldPosition);
+    } else if (box) {
+      box.getCenter(modelWorldPosition); // heightFit 폴백: 본 매칭 실패 릭도 bbox 중심으로 프레이밍
+    }
 
     const target = modelWorldPosition.clone();
     const offset = this.defaultPosition.clone();
-    if (this.heightFit) {
-      const box = computeModelBox(this.scene);
-      const height = box.max.y - box.min.y;
-      if (Number.isFinite(height) && height > 1e-3) {
-        target.y = box.min.y + height * TARGET_HEIGHT_RATIO;
-        offset.multiplyScalar(height / REF_HEIGHT);
-      }
+    if (hasBox && box) {
+      target.y = box.min.y + height * TARGET_HEIGHT_RATIO;
+      offset.multiplyScalar(height / REF_HEIGHT);
     }
 
     this.camera.position.copy(target).add(offset);
