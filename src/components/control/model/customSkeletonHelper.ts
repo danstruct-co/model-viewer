@@ -35,7 +35,7 @@ const JOINT_COLOR = new Color(0x22cc44)
 // 본 형태 = Blender 식 octahedral (사각뿔 2개 — 링이 헤드 쪽 10% 지점, 종원 2026-09-08).
 // 굵기는 본 길이 비례. 색: 바디 = 파랑 / 손가락 = 주황 (Lambert 셰이딩으로 면 구분)
 const BONE_RING_RATIO = 0.1
-const BONE_WIDTH_RATIO = 0.12
+const BONE_WIDTH_RATIO = 0.1 // Blender 기본과 동일 (종원 2026-09-08)
 const BODY_BONE_COLOR = new Color(0x3377dd)
 const FINGER_BONE_COLOR = new Color(0xdd7722)
 
