@@ -29,6 +29,11 @@ export default class FreeCamera {
     this.resetPosition();
   };
 
+  /** 현재 카메라 유지 전환용 — 첫 프레임 자동 initialize(리셋 스냅)를 건너뛴다 */
+  skipInitialReset = () => {
+    this.isInitialized = true;
+  };
+
   resetPosition = () => {
     const box = this.heightFit ? computeModelBox(this.scene) : undefined;
     const height = box ? box.max.y - box.min.y : 0;

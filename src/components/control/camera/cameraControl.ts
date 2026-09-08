@@ -57,9 +57,15 @@ export default class CameraControl {
     this.params.orbitControl.enableZoom = !value
   }
 
-  setTargetType(type: CameraTarget) {
+  setTargetType(type: CameraTarget, keepCamera = false) {
     this.control?.dispose()
     this.control = cameraTargets[type]({ ...this.params, coreNode: this.coreNode })
+    if (keepCamera) {
+      // 드래그로 follow 를 끄는 전환 등 — 리셋 스냅 없이 현재 카메라 그대로 이어간다
+      ;(this.control as { skipInitialReset?: () => void }).skipInitialReset?.()
+      this.currentTarget = type
+      return
+    }
     setTimeout(() => {
       this.control?.initialize()
       this.currentTarget = type
