@@ -40,7 +40,7 @@ const JOINT_COLOR = new Color(0x22cc44)
 // 선택 관절 하이라이트 (종원 2026-09-08): 릭 선택 UI 의 선택 테두리와 동일 문법 —
 // 초록 구를 감싸는 반투명 빨간 halo 구 (파랑 → 빨강, 종원 지시)
 const HIGHLIGHT_COLOR = new Color(0xef4444)
-const HIGHLIGHT_RADIUS_RATIO = 2.0
+const HIGHLIGHT_RADIUS_RATIO = 3.2 // 2.0 은 화면에서 안 보일 만큼 작음 (종원 2026-09-08)
 const JOINT_HOVER_SCALE = 2.0 // 관절 호버 확대 배율 (피킹 옵트인)
 // 본 형태 = Blender 식 octahedral (사각뿔 2개 — 링이 헤드 쪽 10% 지점, 종원 2026-09-08).
 // 굵기는 본 길이 비례. 색: 바디 = 파랑 / 손가락 = 주황 (Lambert 셰이딩으로 면 구분)
@@ -210,7 +210,7 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
         new MeshBasicMaterial({
           color: HIGHLIGHT_COLOR,
           transparent: true,
-          opacity: 0.45,
+          opacity: 0.55,
           depthTest: false,
           depthWrite: false,
           toneMapped: false,
