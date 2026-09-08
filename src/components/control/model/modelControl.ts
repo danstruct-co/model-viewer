@@ -250,6 +250,29 @@ export default class ModelControl {
     this.skeletonHelper?.setJointHover(index)
   }
 
+  // ---- IK 타겟 축 기즈모 (2026-09-08 축 드래그) ----
+  pickSkeletonGizmoAxis(raycaster: import('three').Raycaster) {
+    return this.skeletonHelper?.pickGizmoAxis(raycaster) ?? null
+  }
+
+  setSkeletonAxisHover(axisIndex: number | null) {
+    this.skeletonHelper?.setAxisHover(axisIndex)
+  }
+
+  getSkeletonTargetWorldPosition(out: import('three').Vector3) {
+    return this.skeletonHelper?.getTargetWorldPosition(out) ?? null
+  }
+
+  /** IK 타겟 설정(월드 절대) — 설정된 동안 매 프레임 CCD 홀드 (updateOnFrame) */
+  setSkeletonTargetWorld(target: import('three').Vector3) {
+    this.skeletonHelper?.setTargetWorld(target)
+  }
+
+  /** IK 타겟 해제 — 재생 재개 시 등. 포즈는 mixer 원 포즈로 복귀 */
+  clearSkeletonIK() {
+    this.skeletonHelper?.clearTarget()
+  }
+
   private removeSkeletonHelper() {
     if (this.skeletonHelper) {
       this.skeletonHelper.parent?.remove(this.skeletonHelper)
@@ -261,6 +284,9 @@ export default class ModelControl {
   }
 
   updateOnFrame() {
+    // IK 홀드 (2026-09-08): mixer 가 이 프레임의 원 포즈를 이미 적용한 뒤 실행된다
+    // (useAnimations 의 useFrame 이 먼저 등록) — 타겟이 있는 동안 매 프레임 CCD 재적용
+    this.skeletonHelper?.updateIKHold()
     if (this.autoFitPending) {
       this.autoFitPending = false
       const box = this.computeGeometryBoundingBox()

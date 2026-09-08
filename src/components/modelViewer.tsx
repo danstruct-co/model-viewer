@@ -100,38 +100,105 @@ const ModelViewer = React.forwardRef<HTMLCanvasElement, ModelViewerProps>(
       })
 
       // 관절 구 피킹 옵트인 (2026-09-08): 스켈레톤 헬퍼가 켜진 동안 호버 = 구 2배 + 커서,
-      // 클릭(드래그와 구분 — 이동 5px 미만) = onJointPick(본명). 헬퍼 꺼짐이면 자동 무동작
+      // 클릭(드래그와 구분 — 이동 5px 미만) = onJointPick(본명). 헬퍼 꺼짐이면 자동 무동작.
+      // 선택 관절의 축 기즈모: 호버 = 화살표(원뿔), 좌드래그 = 해당 월드 축으로 IK 타겟 이동
+      // (본체는 IK 적용 단계에서 따라감 — 종원 2026-09-08 블렌더식 본 드래그 1단계)
       useEffect(() => {
         const onJointPick = modelSetting?.onJointPick
         if (!onJointPick) return
         const dom = gl.domElement
         const raycaster = new Raycaster()
         const pointer = new Vector2()
+        const axisDirs = [new Vector3(1, 0, 0), new Vector3(0, 1, 0), new Vector3(0, 0, 1)]
+        const dragOrigin = new Vector3()
+        const dragTarget = new Vector3()
+        const w0 = new Vector3()
         let downX = 0
         let downY = 0
-        const cast = (e: PointerEvent) => {
+        let dragAxis: number | null = null
+        let dragStartT = 0
+
+        const setRay = (e: PointerEvent) => {
           const rect = dom.getBoundingClientRect()
           pointer.set(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1)
           raycaster.setFromCamera(pointer, defaultCamera)
-          return modelControlRef.current?.pickSkeletonJoint(raycaster) ?? null
         }
+        /** ray 와 축 직선(origin + dir·t)의 최근접 축 파라미터 t.
+         *  유도: t_axis = (e − b·d)/(1 − b²), b=ray·dir, d=ray·w0, e=dir·w0 (w0=rayO−origin) */
+        const axisClosestT = (origin: Vector3, dir: Vector3) => {
+          w0.subVectors(raycaster.ray.origin, origin)
+          const b = raycaster.ray.direction.dot(dir)
+          const d = raycaster.ray.direction.dot(w0)
+          const e2 = dir.dot(w0)
+          const denom = 1 - b * b
+          if (Math.abs(denom) < 1e-6) return e2 // 시선과 평행 — 근사
+          return (e2 - b * d) / denom
+        }
+
         const onMove = (e: PointerEvent) => {
-          const hit = cast(e)
-          modelControlRef.current?.setSkeletonJointHover(hit?.index ?? null)
+          const model = modelControlRef.current
+          if (!model) return
+          setRay(e)
+          if (dragAxis !== null) {
+            // 축 드래그 중 — 시작 시점 대비 축 파라미터 변화량만큼 IK 타겟(절대) 이동.
+            // 타겟 설정 즉시 modelControl.updateOnFrame 의 CCD 홀드가 캐릭터를 실시간 추종
+            const t = axisClosestT(dragOrigin, axisDirs[dragAxis])
+            dragTarget.copy(axisDirs[dragAxis]).multiplyScalar(t - dragStartT).add(dragOrigin)
+            model.setSkeletonTargetWorld(dragTarget)
+            return
+          }
+          const axis = model.pickSkeletonGizmoAxis(raycaster)
+          model.setSkeletonAxisHover(axis)
+          if (axis !== null) {
+            model.setSkeletonJointHover(null)
+            dom.style.cursor = 'pointer'
+            return
+          }
+          const hit = model.pickSkeletonJoint(raycaster)
+          model.setSkeletonJointHover(hit?.index ?? null)
           dom.style.cursor = hit ? 'pointer' : ''
         }
         const onDown = (e: PointerEvent) => {
           downX = e.clientX
           downY = e.clientY
+          const model = modelControlRef.current
+          if (!model || e.button !== 0) return
+          // IK 드래그는 일시정지(또는 무애니 T포즈)에서만 — 재생 중엔 mixer 와 싸운다 (종원 2026-09-08)
+          const anim = animationControlRef.current
+          if (anim && anim.actions.length > 0 && anim.state === 'play') return
+          setRay(e)
+          const axis = model.pickSkeletonGizmoAxis(raycaster)
+          if (axis === null) return
+          // 축 드래그 시작 — 카메라 회전 잠금 + 포인터 캡처
+          dragAxis = axis
+          model.getSkeletonTargetWorldPosition(dragOrigin)
+          dragStartT = axisClosestT(dragOrigin, axisDirs[axis])
+          if (orbitControlRef.current) orbitControlRef.current.enabled = false
+          dom.setPointerCapture(e.pointerId)
         }
         const onUp = (e: PointerEvent) => {
+          if (dragAxis !== null) {
+            dragAxis = null
+            if (orbitControlRef.current) orbitControlRef.current.enabled = true
+            if (dom.hasPointerCapture(e.pointerId)) dom.releasePointerCapture(e.pointerId)
+            return // 드래그 종료 — 관절 클릭 아님
+          }
           if (Math.hypot(e.clientX - downX, e.clientY - downY) >= 5) return
-          const hit = cast(e)
+          setRay(e)
+          const hit = modelControlRef.current?.pickSkeletonJoint(raycaster)
           if (hit) onJointPick(hit.name)
         }
         dom.addEventListener('pointermove', onMove)
         dom.addEventListener('pointerdown', onDown)
         dom.addEventListener('pointerup', onUp)
+        // 재생 재개 = IK 타겟 해제 (홀드 포즈는 mixer 원 포즈로 복귀) — 종원 2026-09-08
+        animationControlRef.current?.addStateChangeListener((state) => {
+          if (state === 'play') {
+            dragAxis = null
+            if (orbitControlRef.current) orbitControlRef.current.enabled = true
+            modelControlRef.current?.clearSkeletonIK()
+          }
+        })
         return () => {
           dom.removeEventListener('pointermove', onMove)
           dom.removeEventListener('pointerdown', onDown)

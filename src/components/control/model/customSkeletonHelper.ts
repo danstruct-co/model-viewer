@@ -2,6 +2,7 @@ import {
   Bone,
   BufferGeometry,
   Color,
+  ConeGeometry,
   CylinderGeometry,
   DoubleSide,
   Float32BufferAttribute,
@@ -39,33 +40,80 @@ const _matrixWorldInv = new Matrix4()
 // 관절 구 표시 (종원 2026-09-08 확정): config body 본에만 초록 구 — 미매핑 본은 그리지 않음
 const JOINT_RADIUS = 0.012 // 월드 m — 루트 스케일(autoFit 등) 역보정으로 상수 크기 유지
 const JOINT_COLOR = new Color(0x22cc44)
-// 선택 관절 하이라이트 (종원 2026-09-08 확정): 월드 정렬 XYZ 축 기즈모 — 단색 실린더
-// (그라데이션 라인 AxesHelper·빨간 halo 구 버전은 철회, git 이력 참조).
-// 색 = 우상단 축 기즈모(axisGizmoViewport)와 동일, 두께 = 관절 구 지름의 2/3
+// 선택 관절 하이라이트 (종원 2026-09-08 확정): 월드 정렬 XYZ 축 기즈모 — 단색 실린더,
+// 호버 시 끝에 원뿔이 붙은 화살표, 좌드래그 = 해당 월드 축으로 IK 타겟 이동.
+// (그라데이션 라인·빨간 halo 구 버전은 철회, git 이력 참조)
+// 색 = 순수 RGB(쨍하게), 두께 = 관절 구 지름의 2/3.
+// ※ 재질은 transparent 큐에 넣어야 한다 — opaque 면 three 가 먼저 그려서 transparent 인
+//   본/구가 위를 덮는다(종원 "기즈모가 뒤에 그려지는 느낌" 실측 원인)
 const HIGHLIGHT_AXES_RATIO = 6.0 // 축 길이 = JOINT_RADIUS × 6
 const AXES_THICKNESS = (JOINT_RADIUS * 2 * 2) / 3 // 실린더 지름 (m)
-const AXIS_COLORS = [0xff2060, 0x20df80, 0x2080ff] // X, Y, Z
+const AXIS_COLORS = [0xff0000, 0x00ff00, 0x0000ff] // X, Y, Z — 순수 RGB (종원 2026-09-08)
 const JOINT_HOVER_SCALE = 2.0 // 관절 호버 확대 배율 (피킹 옵트인)
 
-/** 단위 XYZ 축(+방향 실린더 3개, 길이 1) — 스케일로 크기 조절 */
+// ---- CCD IK (three CCDIKSolver 와 동일한 로컬 공간 방식 — 블렌더 Auto-IK 계열) ----
+// 체인 = 엔드(선택 본)의 조상 2개: hand→forearm+arm / foot→leg+upleg / head→neck+spine.
+// mixer 가 매 프레임 원 포즈를 재적용하므로 홀드는 "원 포즈 → CCD" 를 매 프레임 반복 —
+// 결과가 프레임 간 일관돼 지터 없음
+const IK_CHAIN_LEN = 2
+const IK_ITERATIONS = 8
+const _ikInvJoint = new Matrix4()
+const _ikEffLocal = new Vector3()
+const _ikTgtLocal = new Vector3()
+const _ikQuat = new Quaternion()
+
+function solveCCD(endBone: Bone, targetWorld: Vector3) {
+  const chain: Bone[] = []
+  let p: Object3D | null = endBone.parent
+  while (p && (p as Bone).isBone && chain.length < IK_CHAIN_LEN) {
+    chain.push(p as Bone)
+    p = p.parent
+  }
+  if (chain.length === 0) return
+  for (let iter = 0; iter < IK_ITERATIONS; iter++) {
+    for (const joint of chain) {
+      // 관절 로컬 공간에서 이펙터→타겟 방향으로 회전 (three CCDIKSolver 문법)
+      _ikInvJoint.copy(joint.matrixWorld).invert()
+      _ikEffLocal.setFromMatrixPosition(endBone.matrixWorld).applyMatrix4(_ikInvJoint).normalize()
+      _ikTgtLocal.copy(targetWorld).applyMatrix4(_ikInvJoint).normalize()
+      if (_ikEffLocal.lengthSq() < 1e-10 || _ikTgtLocal.lengthSq() < 1e-10) continue
+      _ikQuat.setFromUnitVectors(_ikEffLocal, _ikTgtLocal)
+      joint.quaternion.multiply(_ikQuat)
+      joint.updateMatrixWorld(true) // 서브트리(이펙터 포함) 즉시 갱신
+    }
+  }
+}
+
+/** 단위 XYZ 축(+방향 실린더 3개, 길이 1) + 호버용 원뿔(화살촉, 기본 숨김) */
 function createAxesGizmo() {
   const group = new Group()
   const radius = AXES_THICKNESS / 2 / (JOINT_RADIUS * HIGHLIGHT_AXES_RATIO) // 단위 길이 기준 반지름
-  const geometry = new CylinderGeometry(radius, radius, 1, 8)
-  geometry.translate(0, 0.5, 0) // 원점 → +방향
+  const shaft = new CylinderGeometry(radius, radius, 1, 8)
+  shaft.translate(0, 0.5, 0) // 원점 → +방향
+  const cone = new ConeGeometry(radius * 2.4, radius * 7, 10)
+  cone.translate(0, 1 + radius * 3.5, 0) // 실린더 끝에 화살촉 (원통 길이는 유지)
   const rotations: [number, number, number][] = [
     [0, 0, -Math.PI / 2], // X (+Y 실린더를 +X 로)
     [0, 0, 0], // Y
     [Math.PI / 2, 0, 0], // Z
   ]
   rotations.forEach((rot, i) => {
-    const mesh = new Mesh(
-      geometry,
-      new MeshBasicMaterial({ color: AXIS_COLORS[i], depthTest: false, depthWrite: false, toneMapped: false })
-    )
-    mesh.rotation.set(...rot)
-    mesh.frustumCulled = false
-    group.add(mesh)
+    const material = new MeshBasicMaterial({
+      color: AXIS_COLORS[i],
+      depthTest: false,
+      depthWrite: false,
+      transparent: true, // transparent 큐 강제 — 본/구 위에 렌더
+      toneMapped: false,
+    })
+    const axis = new Group()
+    const shaftMesh = new Mesh(shaft, material)
+    const coneMesh = new Mesh(cone, material)
+    coneMesh.visible = false // 호버 시 화살표로
+    shaftMesh.frustumCulled = coneMesh.frustumCulled = false
+    axis.add(shaftMesh, coneMesh)
+    axis.rotation.set(...rot)
+    axis.userData.axisIndex = i
+    group.add(axis)
   })
   return group
 }
@@ -127,6 +175,9 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
   private highlightBone?: Bone
   private highlightGizmo?: Group
   private hoverIndex: number | null = null
+  /** IK 타겟 (월드 절대 좌표) — 축 드래그로 이동, 설정된 동안 매 프레임 CCD 로 포즈 홀드.
+   *  본 위치 기준 오프셋이 아니라 절대값: IK 로 본이 움직여도 타겟은 고정 (종원 2026-09-08) */
+  private targetWorld: Vector3 | null = null
 
   constructor(root: Object3D, filter?: SkeletonBoneFilter) {
     restoreBoneFlags(root)
@@ -217,9 +268,55 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
     this.hoverIndex = index
   }
 
+  /** 기즈모 축 레이캐스트 피킹 — 맞은 축 인덱스(0=X/1=Y/2=Z) (2026-09-08 축 드래그) */
+  pickGizmoAxis(raycaster: import('three').Raycaster): number | null {
+    if (!this.highlightGizmo || !this.highlightGizmo.visible) return null
+    const hit = raycaster.intersectObject(this.highlightGizmo, true)[0]
+    if (!hit) return null
+    let node: Object3D | null = hit.object
+    while (node && node.userData.axisIndex === undefined) node = node.parent
+    return node ? (node.userData.axisIndex as number) : null
+  }
+
+  /** 축 호버 — 해당 축을 화살표(원뿔 표시)로. null 이면 전부 실린더 */
+  setAxisHover(axisIndex: number | null) {
+    if (!this.highlightGizmo) return
+    this.highlightGizmo.children.forEach((axis, i) => {
+      const cone = (axis as Group).children[1]
+      if (cone) cone.visible = i === axisIndex
+    })
+  }
+
+  /** IK 타겟 설정 (월드 절대) — 축 드래그 소비자용. 설정 즉시 홀드 시작 */
+  setTargetWorld(target: Vector3) {
+    if (!this.targetWorld) this.targetWorld = new Vector3()
+    this.targetWorld.copy(target)
+  }
+
+  /** IK 타겟 해제 — 재생 재개·선택 변경 시. 포즈는 다음 mixer 적용에서 원복 */
+  clearTarget() {
+    this.targetWorld = null
+  }
+
+  /** 드래그 기준점: 타겟이 있으면 타겟, 없으면 선택 본의 현재 월드 위치 */
+  getTargetWorldPosition(out: Vector3): Vector3 | null {
+    if (!this.highlightBone) return null
+    if (this.targetWorld) return out.copy(this.targetWorld)
+    return out.setFromMatrixPosition(this.highlightBone.matrixWorld)
+  }
+
+  /** 매 프레임 IK 홀드 — mixer 가 원 포즈를 덮은 뒤 호출돼야 한다 (updateOnFrame 순서).
+   *  타겟이 설정된 동안 해당 프레임 포즈에 CCD 재적용 (종원 2026-09-08 블렌더식 본 드래그) */
+  updateIKHold() {
+    if (!this.targetWorld || !this.highlightBone) return
+    solveCCD(this.highlightBone, this.targetWorld)
+  }
+
   /** 선택 관절 하이라이트 — 릭 선택 UI 와 연동 (종원 2026-09-08). name null 이면 해제.
    *  GLTFLoader 정규화(sanitizeNodeName) 대응으로 원문+정규화 양쪽 매칭 */
   setHighlightBone(name: string | null) {
+    this.clearTarget() // 선택 변경 = IK 타겟 해제
+    this.setAxisHover(null)
     if (!name) {
       this.highlightBone = undefined
       if (this.highlightGizmo) this.highlightGizmo.visible = false
@@ -300,11 +397,16 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
     }
 
     if (this.highlightGizmo && this.highlightBone && this.highlightGizmo.visible) {
-      // 헬퍼 좌표계가 root 회전·스케일을 물려주므로 역보정 — 축이 항상 **월드 정렬** 유지
+      // 헬퍼 좌표계가 root 회전·스케일을 물려주므로 역보정 — 축이 항상 **월드 정렬** 유지.
+      // 위치 = IK 타겟(드래그 중, 월드→헬퍼 로컬 포인트 변환), 없으면 선택 본 관절
       _scale.setFromMatrixScale(this.root.matrixWorld)
       const hs = (JOINT_RADIUS * HIGHLIGHT_AXES_RATIO) / (Math.abs(_scale.x) || 1)
-      _boneMatrix.multiplyMatrices(_matrixWorldInv, this.highlightBone.matrixWorld)
-      _vector.setFromMatrixPosition(_boneMatrix)
+      if (this.targetWorld) {
+        _vector.copy(this.targetWorld).applyMatrix4(_matrixWorldInv)
+      } else {
+        _boneMatrix.multiplyMatrices(_matrixWorldInv, this.highlightBone.matrixWorld)
+        _vector.setFromMatrixPosition(_boneMatrix)
+      }
       _rotMatrix.extractRotation(this.root.matrixWorld)
       this.highlightGizmo.quaternion.setFromRotationMatrix(_rotMatrix).invert()
       this.highlightGizmo.position.copy(_vector)
@@ -326,9 +428,13 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
       this.boneMesh.dispose()
     }
     if (this.highlightGizmo) {
-      // 실린더 지오메트리는 3축 공유 — 한 번만 dispose
-      ;(this.highlightGizmo.children[0] as Mesh | undefined)?.geometry.dispose()
-      this.highlightGizmo.children.forEach((c) => ((c as Mesh).material as MeshBasicMaterial).dispose())
+      // shaft/cone 지오메트리는 3축 공유 — 각 1회. 재질은 축당 1개(shaft·cone 공유)
+      const firstAxis = this.highlightGizmo.children[0] as Group | undefined
+      ;(firstAxis?.children[0] as Mesh | undefined)?.geometry.dispose()
+      ;(firstAxis?.children[1] as Mesh | undefined)?.geometry.dispose()
+      this.highlightGizmo.children.forEach((axis) =>
+        (((axis as Group).children[0] as Mesh).material as MeshBasicMaterial).dispose()
+      )
     }
   }
 }
