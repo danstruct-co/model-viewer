@@ -23,6 +23,7 @@ export default class ModelControl {
   private autoFitPending: boolean = false
   private skeletonHelper?: CustomSkeletonHelper
   private isSkeletonHelper: boolean = false
+  private skeletonHighlightName: string | null = null
 
   constructor({ scene, coreNodeFinder, materialType, option }: ModelControlParams) {
     this.scene = scene
@@ -230,6 +231,14 @@ export default class ModelControl {
     const parentScene = this.scene.parent ?? this.scene
     parentScene.add(this.skeletonHelper)
     this.isSkeletonHelper = true
+    // 토글 재생성에도 선택 하이라이트 유지 (종원 2026-09-08 릭 선택 연동)
+    if (this.skeletonHighlightName) this.skeletonHelper.setHighlightBone(this.skeletonHighlightName)
+  }
+
+  /** 관절 하이라이트 (릭 선택 UI 연동, 종원 2026-09-08) — 헬퍼가 꺼져 있으면 이름만 보관 */
+  setSkeletonHighlight(name: string | null) {
+    this.skeletonHighlightName = name
+    this.skeletonHelper?.setHighlightBone(name)
   }
 
   private removeSkeletonHelper() {
