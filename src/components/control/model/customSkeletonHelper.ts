@@ -1,13 +1,14 @@
 import {
-  AxesHelper,
   Bone,
   BufferGeometry,
   Color,
+  CylinderGeometry,
   DoubleSide,
   Float32BufferAttribute,
+  Group,
   InstancedMesh,
-  LineBasicMaterial,
   Matrix4,
+  Mesh,
   MeshBasicMaterial,
   MeshLambertMaterial,
   Object3D,
@@ -38,10 +39,36 @@ const _matrixWorldInv = new Matrix4()
 // 관절 구 표시 (종원 2026-09-08 확정): config body 본에만 초록 구 — 미매핑 본은 그리지 않음
 const JOINT_RADIUS = 0.012 // 월드 m — 루트 스케일(autoFit 등) 역보정으로 상수 크기 유지
 const JOINT_COLOR = new Color(0x22cc44)
-// 선택 관절 하이라이트 (종원 2026-09-08 확정): 월드 정렬 XYZ 축 기즈모(AxesHelper —
-// X빨/Y초/Z파). 빨간 halo 구 버전은 철회 — git 이력 참조
+// 선택 관절 하이라이트 (종원 2026-09-08 확정): 월드 정렬 XYZ 축 기즈모 — 단색 실린더
+// (그라데이션 라인 AxesHelper·빨간 halo 구 버전은 철회, git 이력 참조).
+// 색 = 우상단 축 기즈모(axisGizmoViewport)와 동일, 두께 = 관절 구 지름의 2/3
 const HIGHLIGHT_AXES_RATIO = 6.0 // 축 길이 = JOINT_RADIUS × 6
+const AXES_THICKNESS = (JOINT_RADIUS * 2 * 2) / 3 // 실린더 지름 (m)
+const AXIS_COLORS = [0xff2060, 0x20df80, 0x2080ff] // X, Y, Z
 const JOINT_HOVER_SCALE = 2.0 // 관절 호버 확대 배율 (피킹 옵트인)
+
+/** 단위 XYZ 축(+방향 실린더 3개, 길이 1) — 스케일로 크기 조절 */
+function createAxesGizmo() {
+  const group = new Group()
+  const radius = AXES_THICKNESS / 2 / (JOINT_RADIUS * HIGHLIGHT_AXES_RATIO) // 단위 길이 기준 반지름
+  const geometry = new CylinderGeometry(radius, radius, 1, 8)
+  geometry.translate(0, 0.5, 0) // 원점 → +방향
+  const rotations: [number, number, number][] = [
+    [0, 0, -Math.PI / 2], // X (+Y 실린더를 +X 로)
+    [0, 0, 0], // Y
+    [Math.PI / 2, 0, 0], // Z
+  ]
+  rotations.forEach((rot, i) => {
+    const mesh = new Mesh(
+      geometry,
+      new MeshBasicMaterial({ color: AXIS_COLORS[i], depthTest: false, depthWrite: false, toneMapped: false })
+    )
+    mesh.rotation.set(...rot)
+    mesh.frustumCulled = false
+    group.add(mesh)
+  })
+  return group
+}
 // 본 형태 = Blender 식 octahedral (사각뿔 2개 — 링이 헤드 쪽 10% 지점, 종원 2026-09-08).
 // 굵기는 본 길이 비례. 색: 바디 = 파랑 / 손가락 = 주황 (Lambert 셰이딩으로 면 구분)
 const BONE_RING_RATIO = 0.1
@@ -98,7 +125,7 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
   private jointBones?: Bone[]
   private boneMesh?: InstancedMesh
   private highlightBone?: Bone
-  private highlightGizmo?: AxesHelper
+  private highlightGizmo?: Group
   private hoverIndex: number | null = null
 
   constructor(root: Object3D, filter?: SkeletonBoneFilter) {
@@ -205,14 +232,8 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
       return
     }
     if (!this.highlightGizmo) {
-      const gizmo = new AxesHelper(1)
-      const mat = gizmo.material as LineBasicMaterial
-      mat.depthTest = false
-      mat.depthWrite = false
-      mat.transparent = true
-      mat.toneMapped = false
-      gizmo.frustumCulled = false
-      gizmo.renderOrder = this.renderOrder + 3 // 관절 구 위
+      const gizmo = createAxesGizmo()
+      gizmo.children.forEach((c) => (c.renderOrder = this.renderOrder + 3)) // 관절 구 위
       this.add(gizmo)
       this.highlightGizmo = gizmo
     }
@@ -305,7 +326,9 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
       this.boneMesh.dispose()
     }
     if (this.highlightGizmo) {
-      this.highlightGizmo.dispose() // geometry + material
+      // 실린더 지오메트리는 3축 공유 — 한 번만 dispose
+      ;(this.highlightGizmo.children[0] as Mesh | undefined)?.geometry.dispose()
+      this.highlightGizmo.children.forEach((c) => ((c as Mesh).material as MeshBasicMaterial).dispose())
     }
   }
 }
