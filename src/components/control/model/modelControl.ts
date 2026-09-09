@@ -257,6 +257,11 @@ export default class ModelControl {
     return this.skeletonHelper?.getLockedJointNames() ?? []
   }
 
+  /** IK 홀드(드래그 편집) 활성 여부 — 씬 포즈 = 편집 포즈. knot 워핑 적용 가드 (종원 2026-09-09) */
+  hasSkeletonIKHold(): boolean {
+    return this.skeletonHelper?.hasIKHold() ?? false
+  }
+
   /** 관절 피킹 게이트 (종원 2026-09-09 모션 편집 모드) — 끄면 호버 잔상도 정리 */
   setSkeletonPickEnabled(enabled: boolean) {
     this.skeletonPickEnabled = enabled

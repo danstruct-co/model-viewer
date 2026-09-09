@@ -220,6 +220,11 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
     return this.lockedJointNames
   }
 
+  /** IK 홀드 활성 여부 — 타겟이 설정돼 씬 포즈가 편집 포즈인 상태 (knot 워핑 베이크 가드용) */
+  hasIKHold(): boolean {
+    return !!this.targetWorld && this.ikChain.length > 0
+  }
+
   private applyBoneFilter(bodySet: Set<string>, fingerSet: Set<string>) {
     const bodyBones = this.bones.filter((bone) => bodySet.has(bone.name))
     if (bodyBones.length === 0) return // 이름이 하나도 안 맞으면 전체 표시 유지 (필터 오폭 방지)
