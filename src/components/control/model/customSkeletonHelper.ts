@@ -52,67 +52,23 @@ const AXIS_COLORS = [0xff0000, 0x00ff00, 0x0000ff] // X, Y, Z — 순수 RGB (�
 const JOINT_HOVER_SCALE = 2.0 // 관절 호버 확대 배율 (피킹 옵트인)
 
 // ---- CCD IK (three CCDIKSolver 와 동일한 로컬 공간 방식 — 블렌더 Auto-IK 계열) ----
-// 체인 = 엔드(선택 본)의 조상 2개: hand→forearm+arm / foot→leg+upleg / head→neck+spine.
+// 체인 룰 (종원 2026-09-09): 엔드(선택 본)의 조상 중 **config body 본만**, 기본은 hips
+// 직전까지 전체. hips 는 고정 베이스 — 회전 관절에 절대 불포함(상·하체 분리: R15 처럼
+// 스파인이 짧은 릭에서 팔 드래그가 hips 를 돌려 다리까지 끌던 문제의 근본 차단).
+// IK 루트를 지정하면 그 본까지만 꺾는다(직계 부모 1개만도 가능). 미매핑 중간 본은
+// 스켈레톤 직결 표시 철학과 동일하게 CCD 대상에서도 생략.
 // mixer 가 매 프레임 원 포즈를 재적용하므로 홀드는 "원 포즈 → CCD" 를 매 프레임 반복 —
 // 결과가 프레임 간 일관돼 지터 없음
-const IK_CHAIN_LEN = 2
 const IK_ITERATIONS = 8
 const _ikInvJoint = new Matrix4()
 const _ikEffLocal = new Vector3()
 const _ikTgtLocal = new Vector3()
 const _ikQuat = new Quaternion()
-
-/** IK 체인 수집 — 엔드의 조상 Bone 최대 IK_CHAIN_LEN 개 (엔드에서 가까운 순) */
-function collectIKChain(endBone: Bone): Bone[] {
-  const chain: Bone[] = []
-  let p: Object3D | null = endBone.parent
-  while (p && (p as Bone).isBone && chain.length < IK_CHAIN_LEN) {
-    chain.push(p as Bone)
-    p = p.parent
-  }
-  return chain
-}
-
 const _reachA = new Vector3()
 const _reachB = new Vector3()
-
-/** 타겟을 체인 도달 반경으로 클램프 — 한계 밖으로 드래그해도 기즈모가 더 안 나간다
- *  (종원 2026-09-08). 반경 = 체인 루트 관절 기준 링크 길이 합 (×0.999 — 완전 신전 특이점 회피) */
-function clampTargetToReach(endBone: Bone, target: Vector3) {
-  const chain = collectIKChain(endBone)
-  if (chain.length === 0) return
-  const nodes = [...chain].reverse() // 루트 관절부터
-  nodes.push(endBone)
-  let reach = 0
-  for (let i = 0; i + 1 < nodes.length; i++) {
-    _reachA.setFromMatrixPosition(nodes[i].matrixWorld)
-    _reachB.setFromMatrixPosition(nodes[i + 1].matrixWorld)
-    reach += _reachA.distanceTo(_reachB)
-  }
-  _reachA.setFromMatrixPosition(nodes[0].matrixWorld) // 체인 루트 관절 (IK 로 위치 불변)
-  _reachB.subVectors(target, _reachA)
-  const maxDist = reach * 0.999
-  if (_reachB.length() > maxDist) {
-    target.copy(_reachB.normalize().multiplyScalar(maxDist).add(_reachA))
-  }
-}
-
-function solveCCD(endBone: Bone, targetWorld: Vector3) {
-  const chain = collectIKChain(endBone)
-  if (chain.length === 0) return
-  for (let iter = 0; iter < IK_ITERATIONS; iter++) {
-    for (const joint of chain) {
-      // 관절 로컬 공간에서 이펙터→타겟 방향으로 회전 (three CCDIKSolver 문법)
-      _ikInvJoint.copy(joint.matrixWorld).invert()
-      _ikEffLocal.setFromMatrixPosition(endBone.matrixWorld).applyMatrix4(_ikInvJoint).normalize()
-      _ikTgtLocal.copy(targetWorld).applyMatrix4(_ikInvJoint).normalize()
-      if (_ikEffLocal.lengthSq() < 1e-10 || _ikTgtLocal.lengthSq() < 1e-10) continue
-      _ikQuat.setFromUnitVectors(_ikEffLocal, _ikTgtLocal)
-      joint.quaternion.multiply(_ikQuat)
-      joint.updateMatrixWorld(true) // 서브트리(이펙터 포함) 즉시 갱신
-    }
-  }
-}
+// IK 체인 시각화 (종원 2026-09-09): 회전 관절·움직이는 링크 = 노랑 계열로 구분
+const IK_CHAIN_JOINT_COLOR = new Color(0xffcc00)
+const IK_CHAIN_BONE_COLOR = new Color(0xffaa00)
 
 /** 단위 XYZ 축(+방향 실린더 3개, 길이 1) + 호버용 원뿔(화살촉, 기본 숨김) */
 function createAxesGizmo() {
@@ -183,6 +139,9 @@ export type SkeletonBoneFilter = {
   body: string[]
   /** 손가락 본 — 라인만 다른 색으로 표시, 관절 구 없음 (종원 2026-09-08) */
   fingers?: string[]
+  /** hips 본명 — IK 고정 베이스(체인이 절대 넘지 않는 경계, 종원 2026-09-09).
+   *  미지정/미해석이면 경계 없이 body 조상 전체가 체인 후보 */
+  hips?: string
 }
 
 /**
@@ -199,12 +158,20 @@ export type SkeletonBoneFilter = {
  */
 export default class CustomSkeletonHelper extends SkeletonHelper {
   private filteredPairs?: [Bone, Bone][]
+  private pairIsFinger?: boolean[]
   private jointMesh?: InstancedMesh
   private jointBones?: Bone[]
+  private jointBoneSet?: Set<Object3D>
   private boneMesh?: InstancedMesh
   private highlightBone?: Bone
   private highlightGizmo?: Group
   private hoverIndex: number | null = null
+  /** IK 고정 베이스 (config hips) — 체인이 절대 넘지 않는 경계 (종원 2026-09-09) */
+  private hipsBone?: Bone
+  /** 지정 IK 루트 — 체인의 최상위 회전 관절. 미지정이면 hips 직전까지 전체 */
+  private ikRootBone?: Bone
+  /** 현재 선택 기준 IK 체인 (엔드에서 가까운 순) — 선택/루트 변경 시 refreshIKChain 으로 갱신 */
+  private ikChain: Bone[] = []
   /** IK 타겟 (월드 절대 좌표) — 축 드래그로 이동, 설정된 동안 매 프레임 CCD 로 포즈 홀드.
    *  본 위치 기준 오프셋이 아니라 절대값: IK 로 본이 움직여도 타겟은 고정 (종원 2026-09-08) */
   private targetWorld: Vector3 | null = null
@@ -216,6 +183,10 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
       // GLTFLoader 는 노드명을 PropertyBinding.sanitizeNodeName 으로 정규화한다
       // ('腕.L'→'腕L' — 닷 제거 실측 2026-09-08). 필터명도 원문+정규화 양쪽으로 매칭.
       this.applyBoneFilter(toNameSet(filter.body), toNameSet(filter.fingers ?? []))
+      if (filter.hips) {
+        const hipsSet = toNameSet([filter.hips])
+        this.hipsBone = this.bones.find((bone) => hipsSet.has(bone.name))
+      }
     }
   }
 
@@ -265,12 +236,14 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
     bones.renderOrder = this.renderOrder + 1
     this.add(bones)
     this.boneMesh = bones
+    this.pairIsFinger = pairIsFinger
 
-    // 관절 구 (InstancedMesh 1개, 초록 단색) — body 매핑 본에만 (손가락은 구 없음)
+    // 관절 구 (InstancedMesh 1개) — body 매핑 본에만 (손가락은 구 없음).
+    // 재질은 흰색 + 인스턴스 색으로 초록을 굽는다 — IK 체인 하이라이트(노랑)가 인스턴스
+    // 색을 쓰는데, 재질 색이 초록이면 인스턴스 색과 곱해져 둘 다 오염되기 때문
     const joint = new InstancedMesh(
       new SphereGeometry(1, 10, 8),
       new MeshBasicMaterial({
-        color: JOINT_COLOR,
         depthTest: false,
         depthWrite: false,
         transparent: true,
@@ -278,11 +251,112 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
       }),
       bodyBones.length
     )
+    for (let i = 0; i < bodyBones.length; i++) joint.setColorAt(i, JOINT_COLOR)
     joint.frustumCulled = false
     joint.renderOrder = this.renderOrder + 2 // 본 메시 위에 구 표시
     this.add(joint)
     this.jointMesh = joint
     this.jointBones = bodyBones
+    this.jointBoneSet = new Set<Object3D>(bodyBones)
+  }
+
+  // ---- IK 체인 룰 (종원 2026-09-09) ----
+
+  /** 엔드의 조상 walk — config body 본만, hips(고정 베이스) 도달 시 중단(불포함).
+   *  stopAtRoot=true 면 지정 IK 루트까지만(포함) — CCD 용. false 면 전체 후보 — 루트 선택 UI 용 */
+  private walkIKAncestors(endBone: Bone, stopAtRoot: boolean): Bone[] {
+    const chain: Bone[] = []
+    if (!this.jointBoneSet) return chain
+    let p: Object3D | null = endBone.parent
+    while (p && (p as Bone).isBone) {
+      if (p === this.hipsBone) break
+      if (this.jointBoneSet.has(p)) {
+        chain.push(p as Bone)
+        if (stopAtRoot && this.ikRootBone && p === this.ikRootBone) break
+      }
+      p = p.parent
+    }
+    return chain
+  }
+
+  /** IK 루트 지정 후보 = 선택 본의 직계 부모부터 hips 직전까지 (엔드에서 가까운 순).
+   *  선택 본이 없으면 빈 배열 */
+  getIKAncestorNames(): string[] {
+    if (!this.highlightBone) return []
+    return this.walkIKAncestors(this.highlightBone, false).map((bone) => bone.name)
+  }
+
+  /** IK 루트 지정 — null 이면 기본(hips 직전까지 전체). 조상이 아닌 이름은 무시(전체 체인) */
+  setIKRoot(name: string | null) {
+    if (name) {
+      const candidates = toNameSet([name])
+      this.ikRootBone = this.bones.find((bone) => candidates.has(bone.name))
+    } else {
+      this.ikRootBone = undefined
+    }
+    this.refreshIKChain()
+  }
+
+  /** 체인 재수집 + 시각화 — 체인 관절 구·움직이는 링크를 노랑으로 (종원 2026-09-09).
+   *  링크 색 조건: 자식이 (체인∪엔드) 에 있고 부모가 체인 회전 관절일 때만 — 회전
+   *  관절 자신은 위치가 안 변하므로 그 위쪽 링크(예: hips→spine)는 원색 유지 */
+  private refreshIKChain() {
+    this.ikChain = this.highlightBone ? this.walkIKAncestors(this.highlightBone, true) : []
+    if (!this.jointMesh || !this.jointBones) return
+    const chainSet = new Set<Object3D>(this.ikChain)
+    for (let i = 0; i < this.jointBones.length; i++) {
+      this.jointMesh.setColorAt(i, chainSet.has(this.jointBones[i]) ? IK_CHAIN_JOINT_COLOR : JOINT_COLOR)
+    }
+    if (this.jointMesh.instanceColor) this.jointMesh.instanceColor.needsUpdate = true
+    if (this.boneMesh && this.filteredPairs && this.pairIsFinger) {
+      const moving = new Set<Object3D>(this.ikChain)
+      if (this.highlightBone) moving.add(this.highlightBone)
+      for (let i = 0; i < this.filteredPairs.length; i++) {
+        const [bone, parent] = this.filteredPairs[i]
+        const inChain = moving.has(bone) && chainSet.has(parent)
+        this.boneMesh.setColorAt(
+          i,
+          inChain ? IK_CHAIN_BONE_COLOR : this.pairIsFinger[i] ? FINGER_BONE_COLOR : BODY_BONE_COLOR
+        )
+      }
+      if (this.boneMesh.instanceColor) this.boneMesh.instanceColor.needsUpdate = true
+    }
+  }
+
+  /** 타겟을 체인 도달 반경으로 클램프 — 한계 밖으로 드래그해도 기즈모가 더 안 나간다
+   *  (종원 2026-09-08). 반경 = 체인 루트 관절 기준 링크 길이 합 (×0.999 — 완전 신전 특이점 회피) */
+  private clampTargetToReach(endBone: Bone, target: Vector3) {
+    if (this.ikChain.length === 0) return
+    const nodes = [...this.ikChain].reverse() // 루트 관절부터
+    nodes.push(endBone)
+    let reach = 0
+    for (let i = 0; i + 1 < nodes.length; i++) {
+      _reachA.setFromMatrixPosition(nodes[i].matrixWorld)
+      _reachB.setFromMatrixPosition(nodes[i + 1].matrixWorld)
+      reach += _reachA.distanceTo(_reachB)
+    }
+    _reachA.setFromMatrixPosition(nodes[0].matrixWorld) // 체인 루트 관절 (IK 로 위치 불변)
+    _reachB.subVectors(target, _reachA)
+    const maxDist = reach * 0.999
+    if (_reachB.length() > maxDist) {
+      target.copy(_reachB.normalize().multiplyScalar(maxDist).add(_reachA))
+    }
+  }
+
+  private solveCCD(endBone: Bone, targetWorld: Vector3) {
+    if (this.ikChain.length === 0) return
+    for (let iter = 0; iter < IK_ITERATIONS; iter++) {
+      for (const joint of this.ikChain) {
+        // 관절 로컬 공간에서 이펙터→타겟 방향으로 회전 (three CCDIKSolver 문법)
+        _ikInvJoint.copy(joint.matrixWorld).invert()
+        _ikEffLocal.setFromMatrixPosition(endBone.matrixWorld).applyMatrix4(_ikInvJoint).normalize()
+        _ikTgtLocal.copy(targetWorld).applyMatrix4(_ikInvJoint).normalize()
+        if (_ikEffLocal.lengthSq() < 1e-10 || _ikTgtLocal.lengthSq() < 1e-10) continue
+        _ikQuat.setFromUnitVectors(_ikEffLocal, _ikTgtLocal)
+        joint.quaternion.multiply(_ikQuat)
+        joint.updateMatrixWorld(true) // 서브트리(이펙터 포함) 즉시 갱신
+      }
+    }
   }
 
   /** 관절 구 레이캐스트 피킹 — 맞은 관절의 본명/인덱스 (2026-09-08 릭 선택 연동) */
@@ -321,7 +395,7 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
   setTargetWorld(target: Vector3) {
     if (!this.targetWorld) this.targetWorld = new Vector3()
     this.targetWorld.copy(target)
-    if (this.highlightBone) clampTargetToReach(this.highlightBone, this.targetWorld)
+    if (this.highlightBone) this.clampTargetToReach(this.highlightBone, this.targetWorld)
   }
 
   /** IK 타겟 해제 — 재생 재개·선택 변경 시. 포즈는 다음 mixer 적용에서 원복 */
@@ -340,7 +414,7 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
    *  타겟이 설정된 동안 해당 프레임 포즈에 CCD 재적용 (종원 2026-09-08 블렌더식 본 드래그) */
   updateIKHold() {
     if (!this.targetWorld || !this.highlightBone) return
-    solveCCD(this.highlightBone, this.targetWorld)
+    this.solveCCD(this.highlightBone, this.targetWorld)
   }
 
   /** 선택 관절 하이라이트 — 릭 선택 UI 와 연동 (종원 2026-09-08). name null 이면 해제.
@@ -351,12 +425,14 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
     if (!name) {
       this.highlightBone = undefined
       if (this.highlightGizmo) this.highlightGizmo.visible = false
+      this.refreshIKChain() // 체인 해제 + 하이라이트 원색 복구
       return
     }
     const candidates = toNameSet([name])
     this.highlightBone = this.bones.find((bone) => candidates.has(bone.name))
     if (!this.highlightBone) {
       if (this.highlightGizmo) this.highlightGizmo.visible = false
+      this.refreshIKChain()
       return
     }
     if (!this.highlightGizmo) {
@@ -366,6 +442,7 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
       this.highlightGizmo = gizmo
     }
     this.highlightGizmo.visible = true
+    this.refreshIKChain() // 선택 변경 = 체인 재수집 + 시각화
   }
 
   updateMatrixWorld(force?: boolean) {

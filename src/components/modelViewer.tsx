@@ -138,6 +138,17 @@ const ModelViewer = React.forwardRef<HTMLCanvasElement, ModelViewerProps>(
         const onMove = (e: PointerEvent) => {
           const model = modelControlRef.current
           if (!model) return
+          if (!model.skeletonPickEnabled) {
+            // 피킹 게이트 꺼짐 (종원 2026-09-09 모션 편집 모드) — 호버/커서 정리, 진행 중 드래그 중단
+            if (dragAxis !== null) {
+              dragAxis = null
+              if (orbitControlRef.current) orbitControlRef.current.enabled = true
+            }
+            model.setSkeletonJointHover(null)
+            model.setSkeletonAxisHover(null)
+            dom.style.cursor = ''
+            return
+          }
           setRay(e)
           if (dragAxis !== null) {
             // 축 드래그 중 — 시작 시점 대비 축 파라미터 변화량만큼 IK 타겟(절대) 이동.
@@ -162,7 +173,7 @@ const ModelViewer = React.forwardRef<HTMLCanvasElement, ModelViewerProps>(
           downX = e.clientX
           downY = e.clientY
           const model = modelControlRef.current
-          if (!model || e.button !== 0) return
+          if (!model || e.button !== 0 || !model.skeletonPickEnabled) return
           // IK 드래그는 일시정지(또는 무애니 T포즈)에서만 — 재생 중엔 mixer 와 싸운다 (종원 2026-09-08)
           const anim = animationControlRef.current
           if (anim && anim.actions.length > 0 && anim.state === 'play') return
@@ -184,6 +195,7 @@ const ModelViewer = React.forwardRef<HTMLCanvasElement, ModelViewerProps>(
             return // 드래그 종료 — 관절 클릭 아님
           }
           if (Math.hypot(e.clientX - downX, e.clientY - downY) >= 5) return
+          if (!modelControlRef.current?.skeletonPickEnabled) return
           setRay(e)
           const hit = modelControlRef.current?.pickSkeletonJoint(raycaster)
           if (hit) onJointPick(hit.name)

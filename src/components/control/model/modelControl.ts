@@ -22,6 +22,11 @@ export default class ModelControl {
   private modelRadii: Record<string, number> = {}
   private autoFitPending: boolean = false
   private skeletonHelper?: CustomSkeletonHelper
+  /** 지정 IK 루트 본명 (종원 2026-09-09) — 헬퍼 토글 재생성에도 유지 */
+  private skeletonIKRootName: string | null = null
+  /** 관절 피킹(호버/클릭/기즈모 드래그) 허용 — 스튜디오 모션 편집 모드 게이트 (종원 2026-09-09).
+   *  기본 true: onJointPick 을 넘기는 소비자(스튜디오)가 모드에 맞춰 직접 토글한다 */
+  skeletonPickEnabled = true
   private isSkeletonHelper: boolean = false
   private skeletonHighlightName: string | null = null
 
@@ -233,6 +238,27 @@ export default class ModelControl {
     this.isSkeletonHelper = true
     // 토글 재생성에도 선택 하이라이트 유지 (종원 2026-09-08 릭 선택 연동)
     if (this.skeletonHighlightName) this.skeletonHelper.setHighlightBone(this.skeletonHighlightName)
+    if (this.skeletonIKRootName) this.skeletonHelper.setIKRoot(this.skeletonIKRootName)
+  }
+
+  /** IK 루트 지정 (종원 2026-09-09) — null = 기본(hips 직전까지 전체 체인) */
+  setSkeletonIKRoot(name: string | null) {
+    this.skeletonIKRootName = name
+    this.skeletonHelper?.setIKRoot(name)
+  }
+
+  /** 현재 선택 본의 IK 루트 후보(직계 부모 → hips 직전, 원 본명) — 조상 선택 UI 용 */
+  getSkeletonIKAncestors(): string[] {
+    return this.skeletonHelper?.getIKAncestorNames() ?? []
+  }
+
+  /** 관절 피킹 게이트 (종원 2026-09-09 모션 편집 모드) — 끄면 호버 잔상도 정리 */
+  setSkeletonPickEnabled(enabled: boolean) {
+    this.skeletonPickEnabled = enabled
+    if (!enabled) {
+      this.skeletonHelper?.setJointHover(null)
+      this.skeletonHelper?.setAxisHover(null)
+    }
   }
 
   /** 관절 하이라이트 (릭 선택 UI 연동, 종원 2026-09-08) — 헬퍼가 꺼져 있으면 이름만 보관 */

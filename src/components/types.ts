@@ -59,8 +59,9 @@ export type ModelViewerProps = {
     mirrorAxis?: Axis
     autoFit?: boolean
     defaultSkeletonHelper?: boolean
-    /** 스켈레톤 헬퍼 표시 본 필터 (body 구+라인 / fingers 라인만) — 미지정 시 전체 */
-    skeletonFilter?: { body: string[]; fingers?: string[] }
+    /** 스켈레톤 헬퍼 표시 본 필터 (body 구+라인 / fingers 라인만) — 미지정 시 전체.
+     *  hips = IK 고정 베이스 본명 (체인이 절대 넘지 않는 경계, 2026-09-09) */
+    skeletonFilter?: { body: string[]; fingers?: string[]; hips?: string }
     /** 관절 구 피킹 옵트인(스켈레톤 헬퍼 켜진 동안) — 호버 시 구 2배·클릭 시 본명 콜백 (2026-09-08) */
     onJointPick?: (boneName: string) => void
   }
