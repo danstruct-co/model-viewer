@@ -52,11 +52,12 @@ const AXIS_COLORS = [0xff0000, 0x00ff00, 0x0000ff] // X, Y, Z — 순수 RGB (�
 const JOINT_HOVER_SCALE = 2.0 // 관절 호버 확대 배율 (피킹 옵트인)
 
 // ---- CCD IK (three CCDIKSolver 와 동일한 로컬 공간 방식 — 블렌더 Auto-IK 계열) ----
-// 체인 룰 (종원 2026-09-09): 엔드(선택 본)의 조상 중 **config body 본만**, 기본은 hips
-// 직전까지 전체. hips 는 고정 베이스 — 회전 관절에 절대 불포함(상·하체 분리: R15 처럼
-// 스파인이 짧은 릭에서 팔 드래그가 hips 를 돌려 다리까지 끌던 문제의 근본 차단).
-// IK 루트를 지정하면 그 본까지만 꺾는다(직계 부모 1개만도 가능). 미매핑 중간 본은
-// 스켈레톤 직결 표시 철학과 동일하게 CCD 대상에서도 생략.
+// 체인 룰 (종원 2026-09-09): **루트 = 고정 앵커 — 회전 자체를 하지 않는다** ("루트로
+// 설정된 관절은 움직이면 안돼"). 회전 관절 = 루트의 자식부터 엔드 직전까지의 config
+// body 본. 기본 루트 = hips (모든 본의 최상위 조상 — 상·하체 분리: R15 처럼 스파인
+// 짧은 릭에서 팔 드래그가 hips 를 돌려 다리까지 끌던 문제의 근본 차단). 루트를 아래로
+// 내리면(예: 가슴) 그 관절 포함 위쪽 전부 불변. 미매핑 중간 본은 스켈레톤 직결 표시
+// 철학과 동일하게 CCD 대상에서도 생략.
 // mixer 가 매 프레임 원 포즈를 재적용하므로 홀드는 "원 포즈 → CCD" 를 매 프레임 반복 —
 // 결과가 프레임 간 일관돼 지터 없음
 const IK_ITERATIONS = 8
@@ -166,9 +167,9 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
   private highlightBone?: Bone
   private highlightGizmo?: Group
   private hoverIndex: number | null = null
-  /** IK 고정 베이스 (config hips) — 체인이 절대 넘지 않는 경계 (종원 2026-09-09) */
+  /** IK 고정 베이스 (config hips) — 체인이 절대 넘지 않는 경계이자 기본 루트 (종원 2026-09-09) */
   private hipsBone?: Bone
-  /** 지정 IK 루트 — 체인의 최상위 회전 관절. 미지정이면 hips 직전까지 전체 */
+  /** 지정 IK 루트 = **고정 앵커** (회전 불포함). 미지정 = hips 루트(직전까지 전체 회전) */
   private ikRootBone?: Bone
   /** 현재 선택 기준 IK 체인 (엔드에서 가까운 순) — 선택/루트 변경 시 refreshIKChain 으로 갱신 */
   private ikChain: Bone[] = []
@@ -262,31 +263,35 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
 
   // ---- IK 체인 룰 (종원 2026-09-09) ----
 
-  /** 엔드의 조상 walk — config body 본만, hips(고정 베이스) 도달 시 중단(불포함).
-   *  stopAtRoot=true 면 지정 IK 루트까지만(포함) — CCD 용. false 면 전체 후보 — 루트 선택 UI 용 */
+  /** 엔드의 조상 walk — config body 본만. 루트(고정 앵커)·hips 도달 시 중단(**불포함** —
+   *  루트는 회전하지 않는다). stopAtRoot=false 면 hips 직전까지 전체 — 앵커 후보 산출용 */
   private walkIKAncestors(endBone: Bone, stopAtRoot: boolean): Bone[] {
     const chain: Bone[] = []
     if (!this.jointBoneSet) return chain
     let p: Object3D | null = endBone.parent
     while (p && (p as Bone).isBone) {
       if (p === this.hipsBone) break
-      if (this.jointBoneSet.has(p)) {
-        chain.push(p as Bone)
-        if (stopAtRoot && this.ikRootBone && p === this.ikRootBone) break
-      }
+      if (stopAtRoot && this.ikRootBone && p === this.ikRootBone) break
+      if (this.jointBoneSet.has(p)) chain.push(p as Bone)
       p = p.parent
     }
     return chain
   }
 
-  /** IK 루트 지정 후보 = 선택 본의 직계 부모부터 hips 직전까지 (엔드에서 가까운 순).
-   *  선택 본이 없으면 빈 배열 */
+  /** IK 루트(고정 앵커) 후보 — 조부모부터 hips 까지 (엔드에서 가까운 순, hips 포함·기본).
+   *  직계 부모는 앵커로 두면 회전 관절이 0이라 제외. 회전할 관절이 없는 본(hips 직속 등)은
+   *  빈 배열. ※ hips 미해석 릭은 hips 없이 조상 후보만 — 기본(미지정)은 전체 회전 폴백 */
   getIKAncestorNames(): string[] {
     if (!this.highlightBone) return []
-    return this.walkIKAncestors(this.highlightBone, false).map((bone) => bone.name)
+    const ancestors = this.walkIKAncestors(this.highlightBone, false)
+    if (ancestors.length === 0) return []
+    const names = ancestors.slice(1).map((bone) => bone.name)
+    if (this.hipsBone) names.push(this.hipsBone.name)
+    return names
   }
 
-  /** IK 루트 지정 — null 이면 기본(hips 직전까지 전체). 조상이 아닌 이름은 무시(전체 체인) */
+  /** IK 루트(고정 앵커) 지정 — null 이면 기본(hips 앵커 = hips 직전까지 전체 회전).
+   *  조상이 아닌 이름은 무시(기본과 동일) */
   setIKRoot(name: string | null) {
     if (name) {
       const candidates = toNameSet([name])
