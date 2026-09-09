@@ -56,8 +56,10 @@ const JOINT_HOVER_SCALE = 2.0 // 관절 호버 확대 배율 (피킹 옵트인)
 // 따라 움직인다** ("spine1 을 클릭하면 hips 의 자식인 spine1 관절이 움직여야"). 회전은
 // 선택 관절의 부모부터 **루트까지(루트 포함)** — 루트도 제자리 회전한다(루트 관절의
 // 위치는 불변). 기본 루트 = hips. 루트의 다른 자식 서브트리(예: hips 의 다리쪽)는
-// 솔브마다 월드 캡처→복원으로 고정("hips 에 연결된 다리쪽은 그대로") — R15 처럼 스파인
-// 짧은 릭에서 팔 드래그가 hips 를 돌려 다리까지 끌던 문제도 이 보정이 차단한다
+// **말단 IK 핀**으로 보호("다리쪽은 그대로"): 서브트리를 리지드하게 얼리면 본 로컬
+// 위치가 바뀌어 스키닝이 찢어지므로(9/9 실증), 붙은 채 순수 회전만으로 말단(발끝/손/
+// 머리)을 원위치 — 무릎 등 중간 관절이 자연스럽게 굽어 흡수한다(Cascadeur 핀 계열).
+// R15 처럼 스파인 짧은 릭에서 팔 드래그가 hips 를 돌려 다리를 끌던 문제도 이 핀이 차단
 // (과거 방식: hips 회전 자체를 금지 → spine1 처럼 hips 직속 관절을 못 움직여 폐기).
 // 미매핑 중간 본은 스켈레톤 직결 표시 철학과 동일하게 CCD 대상에서도 생략.
 // mixer 가 매 프레임 원 포즈를 재적용하므로 홀드는 "원 포즈 → CCD" 를 매 프레임 반복 —
@@ -69,7 +71,9 @@ const _ikTgtLocal = new Vector3()
 const _ikQuat = new Quaternion()
 const _reachA = new Vector3()
 const _reachB = new Vector3()
-const _pinLocal = new Matrix4()
+const _pinPos = new Vector3()
+const _pinQuat = new Quaternion()
+const _pinScale = new Vector3()
 // IK 체인 시각화 (종원 2026-09-09): 루트~엔드 체인(구·링크) = 노랑 계열로 구분
 const IK_CHAIN_JOINT_COLOR = new Color(0xffcc00)
 const IK_CHAIN_BONE_COLOR = new Color(0xffaa00)
@@ -176,9 +180,10 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
   private ikRootBone?: Bone
   /** 현재 선택 기준 IK 체인 (선택 관절의 부모부터 루트까지, 가까운 순) — refreshIKChain 갱신 */
   private ikChain: Bone[] = []
-  /** 루트의 다른 자식 서브트리 루트들 — IK 솔브마다 월드 고정(캡처→복원) 대상 (종원 2026-09-09) */
-  private ikPinnedNodes: Bone[] = []
-  private ikPinnedSaved: Matrix4[] = []
+  /** 루트의 다른 자식 서브트리 핀 — 서브트리는 붙은 채(스키닝 보존), 말단 이펙터
+   *  (발끝/손/머리)의 월드 위치·방향만 솔브마다 IK 로 원복. chain = 이펙터에서 가까운 순
+   *  회전 관절(무릎 등이 자연 흡수), pos/quat = 프레임 캡처 버퍼 (종원 2026-09-09) */
+  private ikPinned: { chain: Bone[]; effector: Bone; pos: Vector3; quat: Quaternion }[] = []
   /** IK 타겟 (월드 절대 좌표) — 축 드래그로 이동, 설정된 동안 매 프레임 CCD 로 포즈 홀드.
    *  본 위치 기준 오프셋이 아니라 절대값: IK 로 본이 움직여도 타겟은 고정 (종원 2026-09-08) */
   private targetWorld: Vector3 | null = null
@@ -310,31 +315,44 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
     this.refreshIKChain()
   }
 
-  /** 체인 재수집 + 시각화 + 고정 대상 산출 (종원 2026-09-09).
+  /** 체인 재수집 + 시각화 + 핀 대상 산출 (종원 2026-09-09).
    *  노랑 = 루트(기본 hips) 관절부터 선택(IK) 관절까지 구·링크 한 줄 — 조상 선택 칩과
-   *  화면 시작점이 일치한다. 루트의 다른 자식 서브트리는 ikPinnedNodes 로 수집 —
-   *  솔브마다 월드 고정 복원(다리쪽 그대로) 대상 */
+   *  화면 시작점이 일치한다. 루트의 다른 자식 서브트리는 ikPinned 로 수집 —
+   *  솔브마다 말단 IK 보정(다리쪽 그대로, 스키닝 보존) 대상 */
   private refreshIKChain() {
     this.ikChain =
       this.highlightBone && this.highlightBone !== this.hipsBone
         ? this.walkIKAncestors(this.highlightBone, true)
         : []
-    // 루트(체인 마지막)의 실계층 자식 중 선택 관절로 가는 경로 자식만 빼고 전부 고정 대상
-    this.ikPinnedNodes = []
+    // 루트의 다른 body 자식 서브트리마다 핀 구성: 단일 자식 경로의 말단(발끝/손/머리)을
+    // 이펙터로, 그 위 관절들을 보정 체인으로 — 서브트리는 붙은 채 IK 로 말단만 원위치
+    this.ikPinned = []
     const chainRoot = this.ikChain[this.ikChain.length - 1]
-    if (chainRoot && this.highlightBone) {
-      let pathChild: Object3D = this.highlightBone
-      let p: Object3D | null = this.highlightBone.parent
-      while (p && p !== chainRoot) {
-        pathChild = p
-        p = p.parent
-      }
-      if (p === chainRoot) {
-        for (const c of chainRoot.children) {
-          if ((c as Bone).isBone && c !== pathChild) this.ikPinnedNodes.push(c as Bone)
+    if (chainRoot && this.highlightBone && this.filteredPairs && this.pairIsFinger) {
+      const bodyChildren = (bone: Object3D): Bone[] => {
+        const list: Bone[] = []
+        for (let i = 0; i < this.filteredPairs!.length; i++) {
+          if (!this.pairIsFinger![i] && this.filteredPairs![i][1] === bone) list.push(this.filteredPairs![i][0])
         }
+        return list
       }
-      while (this.ikPinnedSaved.length < this.ikPinnedNodes.length) this.ikPinnedSaved.push(new Matrix4())
+      // 루트에서 선택 관절로 가는 경로 쪽 직결 body 자식 — 핀 제외
+      const pathChild = this.ikChain.length >= 2 ? this.ikChain[this.ikChain.length - 2] : this.highlightBone
+      for (const c of bodyChildren(chainRoot)) {
+        if (c === pathChild) continue
+        const path = [c]
+        let kids = bodyChildren(c)
+        while (kids.length === 1) {
+          path.push(kids[0])
+          kids = bodyChildren(kids[0])
+        }
+        this.ikPinned.push({
+          chain: path.slice(0, -1).reverse(), // 이펙터에서 가까운 순 (CCD 문법)
+          effector: path[path.length - 1],
+          pos: new Vector3(),
+          quat: new Quaternion(),
+        })
+      }
     }
     if (!this.jointMesh || !this.jointBones) return
     const chainSet = new Set<Object3D>(this.ikChain)
@@ -378,10 +396,10 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
     }
   }
 
-  private solveCCD(effectorBone: Bone, targetWorld: Vector3) {
-    if (this.ikChain.length === 0) return
+  /** CCD — chain 은 이펙터에서 가까운 순. 메인 체인·핀 보정 체인 공용 */
+  private solveChain(chain: Bone[], effectorBone: Bone, targetWorld: Vector3) {
     for (let iter = 0; iter < IK_ITERATIONS; iter++) {
-      for (const joint of this.ikChain) {
+      for (const joint of chain) {
         // 관절 로컬 공간에서 이펙터→타겟 방향으로 회전 (three CCDIKSolver 문법)
         _ikInvJoint.copy(joint.matrixWorld).invert()
         _ikEffLocal.setFromMatrixPosition(effectorBone.matrixWorld).applyMatrix4(_ikInvJoint).normalize()
@@ -447,21 +465,23 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
 
   /** 매 프레임 IK 홀드 — mixer 가 원 포즈를 덮은 뒤 호출돼야 한다 (updateOnFrame 순서).
    *  타겟이 설정된 동안 해당 프레임 포즈에 CCD 재적용 (종원 2026-09-08 블렌더식 본 드래그).
-   *  솔브 전 루트의 다른 자식 서브트리 월드를 캡처하고 솔브 후 복원 — 루트(hips 등)가
-   *  제자리 회전해도 다리쪽 등 비체인 서브트리는 그대로 (종원 2026-09-09) */
+   *  핀 보정: 솔브 전 각 핀 이펙터(발끝/손/머리)의 월드 위치·방향을 캡처하고 솔브 후
+   *  보정 체인 CCD + 방향 복원 — 루트(hips 등)가 제자리 회전해도 비체인 서브트리는
+   *  붙은 채(순수 회전 = 스키닝 보존) 말단이 제자리를 지킨다 (종원 2026-09-09) */
   updateIKHold() {
     if (!this.targetWorld || !this.highlightBone || this.ikChain.length === 0) return
-    for (let i = 0; i < this.ikPinnedNodes.length; i++) {
-      this.ikPinnedNodes[i].updateWorldMatrix(true, false)
-      this.ikPinnedSaved[i].copy(this.ikPinnedNodes[i].matrixWorld)
+    for (const pin of this.ikPinned) {
+      pin.effector.updateWorldMatrix(true, false)
+      pin.effector.matrixWorld.decompose(pin.pos, pin.quat, _pinScale)
     }
-    this.solveCCD(this.highlightBone, this.targetWorld)
-    for (let i = 0; i < this.ikPinnedNodes.length; i++) {
-      const node = this.ikPinnedNodes[i]
-      if (!node.parent) continue
-      _pinLocal.copy(node.parent.matrixWorld).invert().multiply(this.ikPinnedSaved[i])
-      _pinLocal.decompose(node.position, node.quaternion, node.scale)
-      node.updateMatrixWorld(true)
+    this.solveChain(this.ikChain, this.highlightBone, this.targetWorld)
+    for (const pin of this.ikPinned) {
+      if (pin.chain.length > 0) this.solveChain(pin.chain, pin.effector, pin.pos)
+      // 이펙터 월드 방향 복원 — 로컬 회전 = 부모 월드 회전⁻¹ × 캡처 월드 회전
+      if (!pin.effector.parent) continue
+      pin.effector.parent.matrixWorld.decompose(_pinPos, _pinQuat, _pinScale)
+      pin.effector.quaternion.copy(_pinQuat.invert()).multiply(pin.quat)
+      pin.effector.updateMatrixWorld(true)
     }
   }
 
