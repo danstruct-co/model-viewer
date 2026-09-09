@@ -52,15 +52,15 @@ const AXIS_COLORS = [0xff0000, 0x00ff00, 0x0000ff] // X, Y, Z — 순수 RGB (�
 const JOINT_HOVER_SCALE = 2.0 // 관절 호버 확대 배율 (피킹 옵트인)
 
 // ---- CCD IK (three CCDIKSolver 와 동일한 로컬 공간 방식 — 블렌더 Auto-IK 계열) ----
-// 체인 룰 (종원 2026-09-09 확정): 선택 관절 = IK 이펙터 — **선택한 관절 자체가 기즈모를
-// 따라 움직인다** ("spine1 을 클릭하면 hips 의 자식인 spine1 관절이 움직여야"). 회전은
-// 선택 관절의 부모부터 **루트까지(루트 포함)** — 루트도 제자리 회전한다(루트 관절의
-// 위치는 불변). 기본 루트 = hips. 루트의 다른 자식 서브트리(예: hips 의 다리쪽)는
-// **말단 IK 핀**으로 보호("다리쪽은 그대로"): 서브트리를 리지드하게 얼리면 본 로컬
-// 위치가 바뀌어 스키닝이 찢어지므로(9/9 실증), 붙은 채 순수 회전만으로 말단(발끝/손/
-// 머리)을 원위치 — 무릎 등 중간 관절이 자연스럽게 굽어 흡수한다(Cascadeur 핀 계열).
-// R15 처럼 스파인 짧은 릭에서 팔 드래그가 hips 를 돌려 다리를 끌던 문제도 이 핀이 차단
-// (과거 방식: hips 회전 자체를 금지 → spine1 처럼 hips 직속 관절을 못 움직여 폐기).
+// 체인 룰 (종원 2026-09-09 최종): 선택 관절 = IK 이펙터 — **선택한 관절 자체가 기즈모를
+// 따라 움직인다**. 회전은 선택 관절의 부모부터 루트까지(루트 포함, 제자리 회전 —
+// 루트 관절 위치는 불변). **hips 는 회전·이동 절대 불가** — 체인·루트 후보 상한 =
+// hips 직전("손 움직였을 때 다리 움직이는 게 싫다" — 팔/상체 편집은 하체 불가침).
+// 그 대가로 hips 직속 관절(spine1·허벅지)은 조상이 없어 드래그 불가(한때 hips 회전
+// +다리 핀으로 지원했으나 손 편집까지 다리가 재포즈되는 부작용으로 상한을 되돌림).
+// 지정 루트(가슴 등)의 다른 자식 서브트리(목→머리·반대팔)는 **말단 IK 핀**으로 보호:
+// 리지드 프리즈는 본 로컬 위치가 바뀌어 스키닝이 찢어지므로(9/9 실증), 붙은 채 순수
+// 회전만으로 말단을 원위치 — 중간 관절이 자연스럽게 굽어 흡수(Cascadeur 핀 계열).
 // 미매핑 중간 본은 스켈레톤 직결 표시 철학과 동일하게 CCD 대상에서도 생략.
 // mixer 가 매 프레임 원 포즈를 재적용하므로 홀드는 "원 포즈 → CCD" 를 매 프레임 반복 —
 // 결과가 프레임 간 일관돼 지터 없음
@@ -176,7 +176,7 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
   private hoverIndex: number | null = null
   /** IK 고정 베이스 (config hips) — 체인이 절대 넘지 않는 경계이자 기본 루트 (종원 2026-09-09) */
   private hipsBone?: Bone
-  /** 지정 IK 루트 — 체인의 최상위 회전 관절(포함, 제자리 회전). 미지정 = hips */
+  /** 지정 IK 루트 — 체인의 최상위 회전 관절(포함, 제자리 회전). 미지정 = hips 직전 최상위 */
   private ikRootBone?: Bone
   /** 현재 선택 기준 IK 체인 (선택 관절의 부모부터 루트까지, 가까운 순) — refreshIKChain 갱신 */
   private ikChain: Bone[] = []
@@ -274,33 +274,29 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
 
   // ---- IK 체인 룰 (종원 2026-09-09) ----
 
-  /** 엔드의 조상 walk — config body 본만. stopAtRoot=true 면 유효 루트(지정 루트, 미지정·
-   *  비조상이면 hips)까지 **포함** 후 중단 — CCD 체인용(루트도 회전). false 면 hips
-   *  직전까지 — 루트 후보 산출용(hips 는 호출부가 별도 추가) */
+  /** 엔드의 조상 walk — config body 본만, hips 도달 시 중단(**불포함** — hips 는 절대
+   *  회전·선택 불가, 종원 최종). stopAtRoot=true 면 지정 루트까지 포함 후 중단(루트도
+   *  회전) — CCD 체인용. false 면 hips 직전까지 전체 — 루트 후보 산출용 */
   private walkIKAncestors(endBone: Bone, stopAtRoot: boolean): Bone[] {
     const chain: Bone[] = []
     if (!this.jointBoneSet) return chain
     let p: Object3D | null = endBone.parent
     while (p && (p as Bone).isBone) {
-      if (stopAtRoot && (p === this.ikRootBone || p === this.hipsBone)) {
-        if (this.jointBoneSet.has(p)) chain.push(p as Bone)
-        break
-      }
-      if (!stopAtRoot && p === this.hipsBone) break
+      if (p === this.hipsBone) break
       if (this.jointBoneSet.has(p)) chain.push(p as Bone)
+      if (stopAtRoot && p === this.ikRootBone) break
       p = p.parent
     }
     return chain
   }
 
-  /** IK 루트 후보 — 직계 부모부터 hips 까지 (엔드에서 가까운 순, hips 포함·기본).
-   *  루트 = 직계 부모면 그 부모 하나만 회전(관절 하나 꺾기). hips 선택은 빈 배열(이동 불가).
-   *  ※ hips 미해석 릭은 조상 후보만 — 기본(미지정)은 전체 회전 폴백 */
+  /** IK 루트 후보 — 직계 부모부터 hips **직전**까지 (엔드에서 가까운 순). hips 는 회전·
+   *  이동 절대 불가(종원 최종 — 손 편집이 다리에 영향 주지 않게)라 후보에서 제외.
+   *  루트 = 직계 부모면 그 부모 하나만 회전. hips 직속 관절(spine1·허벅지)은 조상이
+   *  없어 빈 배열 = 드래그 불가 */
   getIKAncestorNames(): string[] {
     if (!this.highlightBone || this.highlightBone === this.hipsBone) return []
-    const names = this.walkIKAncestors(this.highlightBone, false).map((bone) => bone.name)
-    if (this.hipsBone) names.push(this.hipsBone.name)
-    return names
+    return this.walkIKAncestors(this.highlightBone, false).map((bone) => bone.name)
   }
 
   /** IK 루트(고정 앵커) 지정 — null 이면 기본(hips 앵커 = hips 직전까지 전체 회전).
@@ -316,9 +312,9 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
   }
 
   /** 체인 재수집 + 시각화 + 핀 대상 산출 (종원 2026-09-09).
-   *  노랑 = 루트(기본 hips) 관절부터 선택(IK) 관절까지 구·링크 한 줄 — 조상 선택 칩과
-   *  화면 시작점이 일치한다. 루트의 다른 자식 서브트리는 ikPinned 로 수집 —
-   *  솔브마다 말단 IK 보정(다리쪽 그대로, 스키닝 보존) 대상 */
+   *  노랑 구 = 회전 관절(루트~선택). 링크는 고정 경계(기본 hips)→체인 톱 연결까지 노랑 —
+   *  체인이 hips/경계부터 한 줄로 이어져 보이되 경계 구는 원색(안 움직임 표시).
+   *  지정 루트의 다른 자식 서브트리는 ikPinned 로 수집 — 솔브마다 말단 IK 보정 대상 */
   private refreshIKChain() {
     this.ikChain =
       this.highlightBone && this.highlightBone !== this.hipsBone
@@ -358,6 +354,9 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
     const chainSet = new Set<Object3D>(this.ikChain)
     const moving = new Set<Object3D>(this.ikChain)
     if (this.highlightBone && this.ikChain.length > 0) moving.add(this.highlightBone) // 선택 관절 포함
+    // 체인 톱(회전 최상위)의 pair 부모 = 고정 경계(기본 hips) — 경계 구는 원색 유지하되
+    // 경계→톱 링크는 노랑: 체인이 hips/경계에서부터 이어져 보이게 (종원 시각화 요청)
+    const topJoint = this.ikChain[this.ikChain.length - 1]
     for (let i = 0; i < this.jointBones.length; i++) {
       this.jointMesh.setColorAt(i, moving.has(this.jointBones[i]) ? IK_CHAIN_JOINT_COLOR : JOINT_COLOR)
     }
@@ -365,7 +364,7 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
     if (this.boneMesh && this.filteredPairs && this.pairIsFinger) {
       for (let i = 0; i < this.filteredPairs.length; i++) {
         const [bone, parent] = this.filteredPairs[i]
-        const inChain = moving.has(bone) && chainSet.has(parent)
+        const inChain = (moving.has(bone) && chainSet.has(parent)) || bone === topJoint
         this.boneMesh.setColorAt(
           i,
           inChain ? IK_CHAIN_BONE_COLOR : this.pairIsFinger[i] ? FINGER_BONE_COLOR : BODY_BONE_COLOR
