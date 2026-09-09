@@ -52,12 +52,14 @@ const AXIS_COLORS = [0xff0000, 0x00ff00, 0x0000ff] // X, Y, Z — 순수 RGB (�
 const JOINT_HOVER_SCALE = 2.0 // 관절 호버 확대 배율 (피킹 옵트인)
 
 // ---- CCD IK (three CCDIKSolver 와 동일한 로컬 공간 방식 — 블렌더 Auto-IK 계열) ----
-// 체인 룰 (종원 2026-09-09): **루트 = 고정 앵커 — 회전 자체를 하지 않는다** ("루트로
-// 설정된 관절은 움직이면 안돼"). 회전 관절 = 루트의 자식부터 엔드 직전까지의 config
-// body 본. 기본 루트 = hips (모든 본의 최상위 조상 — 상·하체 분리: R15 처럼 스파인
-// 짧은 릭에서 팔 드래그가 hips 를 돌려 다리까지 끌던 문제의 근본 차단). 루트를 아래로
-// 내리면(예: 가슴) 그 관절 포함 위쪽 전부 불변. 미매핑 중간 본은 스켈레톤 직결 표시
-// 철학과 동일하게 CCD 대상에서도 생략.
+// 체인 룰 (종원 2026-09-09 확정): 회전 체인 = **선택 본 자신부터** 루트(고정 경계)의
+// 자식까지의 config body 본 — "spine1 을 선택하면(조상 = hips 뿐) hips 에서 뽑아져
+// 나오는 spine1 이 움직여야 한다". 루트·hips 는 절대 회전하지 않으므로(상·하체 분리:
+// R15 처럼 스파인 짧은 릭에서 팔 드래그가 hips 를 돌려 다리까지 끌던 문제의 근본 차단)
+// 루트의 다른 자식들은 자동 불변. IK 타겟(기즈모) = 선택 본의 tail(직결 body 자식
+// 관절) — 블렌더 본 잡기와 동일하게 선택 본 자신이 꺾인다. body 자식 없는 말단
+// (손/발/머리)은 자기 관절이 타겟 — 자기 회전은 가드로 생략돼 기존 드래그와 동일.
+// 미매핑 중간 본은 스켈레톤 직결 표시 철학과 동일하게 CCD 대상에서도 생략.
 // mixer 가 매 프레임 원 포즈를 재적용하므로 홀드는 "원 포즈 → CCD" 를 매 프레임 반복 —
 // 결과가 프레임 간 일관돼 지터 없음
 const IK_ITERATIONS = 8
@@ -169,10 +171,13 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
   private hoverIndex: number | null = null
   /** IK 고정 베이스 (config hips) — 체인이 절대 넘지 않는 경계이자 기본 루트 (종원 2026-09-09) */
   private hipsBone?: Bone
-  /** 지정 IK 루트 = **고정 앵커** (회전 불포함). 미지정 = hips 루트(직전까지 전체 회전) */
+  /** 지정 IK 루트 = 고정 경계 (회전 불포함). 체인 = 루트의 자식부터 선택 본까지. 미지정 = hips */
   private ikRootBone?: Bone
-  /** 현재 선택 기준 IK 체인 (엔드에서 가까운 순) — 선택/루트 변경 시 refreshIKChain 으로 갱신 */
+  /** 현재 선택 기준 IK 체인 (선택 본 **포함**, 엔드에서 가까운 순) — 선택/루트 변경 시 refreshIKChain 갱신 */
   private ikChain: Bone[] = []
+  /** IK 타겟이 쫓는 관절 = 선택 본의 tail(직결 body 자식). 말단(손/발/머리 — body 자식 없음)은
+   *  선택 본 자신 — 이때 선택 본의 CCD 스텝은 zero-length 가드로 자연 생략 (종원 2026-09-09) */
+  private ikEffectorBone?: Bone
   /** IK 타겟 (월드 절대 좌표) — 축 드래그로 이동, 설정된 동안 매 프레임 CCD 로 포즈 홀드.
    *  본 위치 기준 오프셋이 아니라 절대값: IK 로 본이 움직여도 타겟은 고정 (종원 2026-09-08) */
   private targetWorld: Vector3 | null = null
@@ -278,14 +283,15 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
     return chain
   }
 
-  /** IK 루트(고정 앵커) 후보 — 조부모부터 hips 까지 (엔드에서 가까운 순, hips 포함·기본).
-   *  직계 부모는 앵커로 두면 회전 관절이 0이라 제외. 회전할 관절이 없는 본(hips 직속 등)은
-   *  빈 배열. ※ hips 미해석 릭은 hips 없이 조상 후보만 — 기본(미지정)은 전체 회전 폴백 */
+  /** IK 루트(고정 경계) 후보 — 직계 부모부터 hips 까지 (엔드에서 가까운 순, hips 포함·기본).
+   *  루트 = 직계 부모여도 선택 본 하나는 꺾이므로 유효. 단 말단 본(타겟 = 자기 관절)은
+   *  부모를 루트로 두면 회전 관절이 0이라 직계 부모 제외. hips 선택은 빈 배열(이동 불가).
+   *  ※ hips 미해석 릭은 hips 없이 조상 후보만 — 기본(미지정)은 전체 회전 폴백 */
   getIKAncestorNames(): string[] {
-    if (!this.highlightBone) return []
+    if (!this.highlightBone || this.highlightBone === this.hipsBone) return []
     const ancestors = this.walkIKAncestors(this.highlightBone, false)
-    if (ancestors.length === 0) return []
-    const names = ancestors.slice(1).map((bone) => bone.name)
+    if (this.ikEffectorBone === this.highlightBone) ancestors.shift() // 말단 — 부모 루트 무의미
+    const names = ancestors.map((bone) => bone.name)
     if (this.hipsBone) names.push(this.hipsBone.name)
     return names
   }
@@ -307,7 +313,11 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
    *  칩과 화면 시작점이 일치한다. 실제 회전은 루트의 자식(체인)부터 — 루트 구와
    *  루트→최상위 회전 관절 링크는 움직이지 않지만 시각적으로 포함 */
   private refreshIKChain() {
-    this.ikChain = this.highlightBone ? this.walkIKAncestors(this.highlightBone, true) : []
+    // 체인 = 선택 본 자신 + 조상 (hips 는 이동 불가라 제외)
+    this.ikChain =
+      this.highlightBone && this.highlightBone !== this.hipsBone
+        ? [this.highlightBone, ...this.walkIKAncestors(this.highlightBone, true)]
+        : []
     if (!this.jointMesh || !this.jointBones) return
     const chainSet = new Set<Object3D>(this.ikChain)
     // filteredPairs 는 (본, 허용 조상) 직결이라 최상위 회전 관절의 pair 부모 = 루트(고정 경계)
@@ -319,8 +329,7 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
     }
     if (this.jointMesh.instanceColor) this.jointMesh.instanceColor.needsUpdate = true
     if (this.boneMesh && this.filteredPairs && this.pairIsFinger) {
-      const moving = new Set<Object3D>(this.ikChain)
-      if (this.highlightBone) moving.add(this.highlightBone)
+      const moving = new Set<Object3D>(this.ikChain) // 선택 본 포함
       for (let i = 0; i < this.filteredPairs.length; i++) {
         const [bone, parent] = this.filteredPairs[i]
         const inChain = (moving.has(bone) && chainSet.has(parent)) || bone === topJoint
@@ -334,11 +343,12 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
   }
 
   /** 타겟을 체인 도달 반경으로 클램프 — 한계 밖으로 드래그해도 기즈모가 더 안 나간다
-   *  (종원 2026-09-08). 반경 = 체인 루트 관절 기준 링크 길이 합 (×0.999 — 완전 신전 특이점 회피) */
-  private clampTargetToReach(endBone: Bone, target: Vector3) {
+   *  (종원 2026-09-08). 반경 = 체인 최상위 관절 기준 이펙터까지 링크 길이 합
+   *  (×0.999 — 완전 신전 특이점 회피) */
+  private clampTargetToReach(effectorBone: Bone, target: Vector3) {
     if (this.ikChain.length === 0) return
-    const nodes = [...this.ikChain].reverse() // 루트 관절부터
-    nodes.push(endBone)
+    const nodes = [...this.ikChain].reverse() // 최상위 회전 관절부터
+    nodes.push(effectorBone)
     let reach = 0
     for (let i = 0; i + 1 < nodes.length; i++) {
       _reachA.setFromMatrixPosition(nodes[i].matrixWorld)
@@ -353,13 +363,14 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
     }
   }
 
-  private solveCCD(endBone: Bone, targetWorld: Vector3) {
+  private solveCCD(effectorBone: Bone, targetWorld: Vector3) {
     if (this.ikChain.length === 0) return
     for (let iter = 0; iter < IK_ITERATIONS; iter++) {
       for (const joint of this.ikChain) {
-        // 관절 로컬 공간에서 이펙터→타겟 방향으로 회전 (three CCDIKSolver 문법)
+        // 관절 로컬 공간에서 이펙터→타겟 방향으로 회전 (three CCDIKSolver 문법).
+        // 말단 선택(이펙터 == 선택 본)의 자기 회전 스텝은 아래 zero-length 가드로 생략
         _ikInvJoint.copy(joint.matrixWorld).invert()
-        _ikEffLocal.setFromMatrixPosition(endBone.matrixWorld).applyMatrix4(_ikInvJoint).normalize()
+        _ikEffLocal.setFromMatrixPosition(effectorBone.matrixWorld).applyMatrix4(_ikInvJoint).normalize()
         _ikTgtLocal.copy(targetWorld).applyMatrix4(_ikInvJoint).normalize()
         if (_ikEffLocal.lengthSq() < 1e-10 || _ikTgtLocal.lengthSq() < 1e-10) continue
         _ikQuat.setFromUnitVectors(_ikEffLocal, _ikTgtLocal)
@@ -405,7 +416,7 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
   setTargetWorld(target: Vector3) {
     if (!this.targetWorld) this.targetWorld = new Vector3()
     this.targetWorld.copy(target)
-    if (this.highlightBone) this.clampTargetToReach(this.highlightBone, this.targetWorld)
+    if (this.ikEffectorBone) this.clampTargetToReach(this.ikEffectorBone, this.targetWorld)
   }
 
   /** IK 타겟 해제 — 재생 재개·선택 변경 시. 포즈는 다음 mixer 적용에서 원복 */
@@ -413,18 +424,27 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
     this.targetWorld = null
   }
 
-  /** 드래그 기준점: 타겟이 있으면 타겟, 없으면 선택 본의 현재 월드 위치 */
+  /** 드래그 기준점: 타겟이 있으면 타겟, 없으면 이펙터(선택 본 tail) 관절의 현재 월드 위치 */
   getTargetWorldPosition(out: Vector3): Vector3 | null {
-    if (!this.highlightBone) return null
+    if (!this.highlightBone || !this.ikEffectorBone) return null
     if (this.targetWorld) return out.copy(this.targetWorld)
-    return out.setFromMatrixPosition(this.highlightBone.matrixWorld)
+    return out.setFromMatrixPosition(this.ikEffectorBone.matrixWorld)
   }
 
   /** 매 프레임 IK 홀드 — mixer 가 원 포즈를 덮은 뒤 호출돼야 한다 (updateOnFrame 순서).
    *  타겟이 설정된 동안 해당 프레임 포즈에 CCD 재적용 (종원 2026-09-08 블렌더식 본 드래그) */
   updateIKHold() {
-    if (!this.targetWorld || !this.highlightBone) return
-    this.solveCCD(this.highlightBone, this.targetWorld)
+    if (!this.targetWorld || !this.ikEffectorBone) return
+    this.solveCCD(this.ikEffectorBone, this.targetWorld)
+  }
+
+  /** 직결 body 자식 (filteredPairs 첫 항목, 손가락 제외 — 손은 말단 취급) = 선택 본의 tail 관절 */
+  private bodyChildOf(bone: Bone): Bone | undefined {
+    if (!this.filteredPairs || !this.pairIsFinger) return undefined
+    for (let i = 0; i < this.filteredPairs.length; i++) {
+      if (!this.pairIsFinger[i] && this.filteredPairs[i][1] === bone) return this.filteredPairs[i][0]
+    }
+    return undefined
   }
 
   /** 선택 관절 하이라이트 — 릭 선택 UI 와 연동 (종원 2026-09-08). name null 이면 해제.
@@ -434,12 +454,19 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
     this.setAxisHover(null)
     if (!name) {
       this.highlightBone = undefined
+      this.ikEffectorBone = undefined
       if (this.highlightGizmo) this.highlightGizmo.visible = false
       this.refreshIKChain() // 체인 해제 + 하이라이트 원색 복구
       return
     }
     const candidates = toNameSet([name])
     this.highlightBone = this.bones.find((bone) => candidates.has(bone.name))
+    // 이펙터 = 직결 body 자식 관절(선택 본의 tail), 말단은 자기 관절.
+    // hips 는 이동 불가(체인 빔) — 기즈모가 자식 관절로 튀지 않게 자기 관절 유지
+    this.ikEffectorBone =
+      this.highlightBone && this.highlightBone !== this.hipsBone
+        ? this.bodyChildOf(this.highlightBone) ?? this.highlightBone
+        : this.highlightBone
     if (!this.highlightBone) {
       if (this.highlightGizmo) this.highlightGizmo.visible = false
       this.refreshIKChain()
@@ -516,13 +543,13 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
 
     if (this.highlightGizmo && this.highlightBone && this.highlightGizmo.visible) {
       // 헬퍼 좌표계가 root 회전·스케일을 물려주므로 역보정 — 축이 항상 **월드 정렬** 유지.
-      // 위치 = IK 타겟(드래그 중, 월드→헬퍼 로컬 포인트 변환), 없으면 선택 본 관절
+      // 위치 = IK 타겟(드래그 중, 월드→헬퍼 로컬 포인트 변환), 없으면 이펙터(선택 본 tail) 관절
       _scale.setFromMatrixScale(this.root.matrixWorld)
       const hs = (JOINT_RADIUS * HIGHLIGHT_AXES_RATIO) / (Math.abs(_scale.x) || 1)
       if (this.targetWorld) {
         _vector.copy(this.targetWorld).applyMatrix4(_matrixWorldInv)
       } else {
-        _boneMatrix.multiplyMatrices(_matrixWorldInv, this.highlightBone.matrixWorld)
+        _boneMatrix.multiplyMatrices(_matrixWorldInv, (this.ikEffectorBone ?? this.highlightBone).matrixWorld)
         _vector.setFromMatrixPosition(_boneMatrix)
       }
       _rotMatrix.extractRotation(this.root.matrixWorld)
