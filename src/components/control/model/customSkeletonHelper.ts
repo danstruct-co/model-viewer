@@ -56,8 +56,9 @@ const JOINT_HOVER_SCALE = 2.0 // 관절 호버 확대 배율 (피킹 옵트인)
 // 따라 움직인다**. 회전은 선택 관절의 부모부터 루트까지(루트 포함, 제자리 회전 —
 // 루트 관절 위치는 불변). **hips 는 회전·이동 절대 불가** — 체인·루트 후보 상한 =
 // hips 직전("손 움직였을 때 다리 움직이는 게 싫다" — 팔/상체 편집은 하체 불가침).
-// 그 대가로 hips 직속 관절(spine1·허벅지)은 조상이 없어 드래그 불가(한때 hips 회전
-// +다리 핀으로 지원했으나 손 편집까지 다리가 재포즈되는 부작용으로 상한을 되돌림).
+// hips 직속 관절(spine1·허벅지)은 조상이 없어 위치 IK 불가 → **FK 회전 모드**: 자기 본
+// 단일 체인 + tail(직결 body 자식)을 이펙터로 회전 — spine1 을 끌면 상체가 그 관절에서
+// 통째로 젖혀지고 허벅지를 끌면 다리가 고관절에서 스윙, 상·하체 상호 영향 0 유지.
 // 지정 루트(가슴 등)의 다른 자식 서브트리(목→머리·반대팔)는 **말단 IK 핀**으로 보호:
 // 리지드 프리즈는 본 로컬 위치가 바뀌어 스키닝이 찢어지므로(9/9 실증), 붙은 채 순수
 // 회전만으로 말단을 원위치 — 중간 관절이 자연스럽게 굽어 흡수(Cascadeur 핀 계열).
@@ -74,6 +75,7 @@ const _reachB = new Vector3()
 const _pinPos = new Vector3()
 const _pinQuat = new Quaternion()
 const _pinScale = new Vector3()
+const _fkTarget = new Vector3()
 // IK 체인 시각화 (종원 2026-09-09): 루트~엔드 체인(구·링크) = 노랑 계열로 구분
 const IK_CHAIN_JOINT_COLOR = new Color(0xffcc00)
 const IK_CHAIN_BONE_COLOR = new Color(0xffaa00)
@@ -184,6 +186,12 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
    *  (발끝/손/머리)의 월드 위치·방향만 솔브마다 IK 로 원복. chain = 이펙터에서 가까운 순
    *  회전 관절(무릎 등이 자연 흡수), pos/quat = 프레임 캡처 버퍼 (종원 2026-09-09) */
   private ikPinned: { chain: Bone[]; effector: Bone; pos: Vector3; quat: Quaternion }[] = []
+  /** FK 회전 모드 (종원 2026-09-09 — hips 직속 관절 spine1·허벅지 전용): 조상 후보가
+   *  없어 위치 IK 불가 → 기즈모 드래그를 자기 본 회전으로 매핑. tail = 직결 body 자식
+   *  관절(이펙터), 드래그 오프셋(관절 기준)을 tail 절대 목표로 환산해 단일 관절 CCD */
+  private fkTailBone?: Bone
+  private fkBaseTail = new Vector3()
+  private fkBaseJoint = new Vector3()
   /** IK 타겟 (월드 절대 좌표) — 축 드래그로 이동, 설정된 동안 매 프레임 CCD 로 포즈 홀드.
    *  본 위치 기준 오프셋이 아니라 절대값: IK 로 본이 움직여도 타겟은 고정 (종원 2026-09-08) */
   private targetWorld: Vector3 | null = null
@@ -320,6 +328,16 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
       this.highlightBone && this.highlightBone !== this.hipsBone
         ? this.walkIKAncestors(this.highlightBone, true)
         : []
+    // 조상이 없는 관절(hips 직속 — spine1·허벅지) = FK 회전 모드: 자기 본 단일 체인,
+    // tail(직결 body 자식)을 이펙터로 회전 — 상·하체 상호 영향 0 유지 (종원 2026-09-09)
+    this.fkTailBone = undefined
+    if (this.ikChain.length === 0 && this.highlightBone && this.highlightBone !== this.hipsBone) {
+      const tail = this.bodyChildOf(this.highlightBone)
+      if (tail) {
+        this.fkTailBone = tail
+        this.ikChain = [this.highlightBone]
+      }
+    }
     // 루트의 다른 body 자식 서브트리마다 핀 구성: 단일 자식 경로의 말단(발끝/손/머리)을
     // 이펙터로, 그 위 관절들을 보정 체인으로 — 서브트리는 붙은 채 IK 로 말단만 원위치
     this.ikPinned = []
@@ -443,11 +461,21 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
     })
   }
 
-  /** IK 타겟 설정 (월드 절대) — 축 드래그 소비자용. 체인 도달 반경으로 클램프 후 홀드 */
+  /** IK 타겟 설정 (월드 절대) — 축 드래그 소비자용. 체인 도달 반경으로 클램프 후 홀드.
+   *  FK 모드는 드래그 시작 시 관절·tail 월드 기준점 캡처(홀드 동안 프레임 포즈 불변) */
   setTargetWorld(target: Vector3) {
-    if (!this.targetWorld) this.targetWorld = new Vector3()
+    if (!this.targetWorld) {
+      this.targetWorld = new Vector3()
+      if (this.fkTailBone && this.highlightBone) {
+        this.fkTailBone.updateWorldMatrix(true, false)
+        this.fkBaseTail.setFromMatrixPosition(this.fkTailBone.matrixWorld)
+        this.fkBaseJoint.setFromMatrixPosition(this.highlightBone.matrixWorld)
+      }
+    }
     this.targetWorld.copy(target)
-    if (this.highlightBone) this.clampTargetToReach(this.highlightBone, this.targetWorld)
+    if (this.highlightBone) {
+      this.clampTargetToReach(this.fkTailBone ?? this.highlightBone, this.targetWorld)
+    }
   }
 
   /** IK 타겟 해제 — 재생 재개·선택 변경 시. 포즈는 다음 mixer 적용에서 원복 */
@@ -469,6 +497,13 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
    *  붙은 채(순수 회전 = 스키닝 보존) 말단이 제자리를 지킨다 (종원 2026-09-09) */
   updateIKHold() {
     if (!this.targetWorld || !this.highlightBone || this.ikChain.length === 0) return
+    if (this.fkTailBone) {
+      // FK: 기즈모(관절 기준) 오프셋을 tail 절대 목표로 환산 — 본이 그 방향으로 젖혀진다.
+      // 드래그량 ≈ tail 이동량이라 감도가 위치 IK 와 동일
+      _fkTarget.copy(this.targetWorld).sub(this.fkBaseJoint).add(this.fkBaseTail)
+      this.solveChain(this.ikChain, this.fkTailBone, _fkTarget)
+      return
+    }
     for (const pin of this.ikPinned) {
       pin.effector.updateWorldMatrix(true, false)
       pin.effector.matrixWorld.decompose(pin.pos, pin.quat, _pinScale)
@@ -482,6 +517,15 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
       pin.effector.quaternion.copy(_pinQuat.invert()).multiply(pin.quat)
       pin.effector.updateMatrixWorld(true)
     }
+  }
+
+  /** 직결 body 자식 (filteredPairs 첫 항목, 손가락 제외) — FK 모드의 tail(이펙터) 관절 */
+  private bodyChildOf(bone: Bone): Bone | undefined {
+    if (!this.filteredPairs || !this.pairIsFinger) return undefined
+    for (let i = 0; i < this.filteredPairs.length; i++) {
+      if (!this.pairIsFinger[i] && this.filteredPairs[i][1] === bone) return this.filteredPairs[i][0]
+    }
+    return undefined
   }
 
   /** 선택 관절 하이라이트 — 릭 선택 UI 와 연동 (종원 2026-09-08). name null 이면 해제.
