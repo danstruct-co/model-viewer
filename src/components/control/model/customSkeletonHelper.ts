@@ -67,7 +67,7 @@ const _ikTgtLocal = new Vector3()
 const _ikQuat = new Quaternion()
 const _reachA = new Vector3()
 const _reachB = new Vector3()
-// IK 체인 시각화 (종원 2026-09-09): 회전 관절·움직이는 링크 = 노랑 계열로 구분
+// IK 체인 시각화 (종원 2026-09-09): 루트~엔드 체인(구·링크) = 노랑 계열로 구분
 const IK_CHAIN_JOINT_COLOR = new Color(0xffcc00)
 const IK_CHAIN_BONE_COLOR = new Color(0xffaa00)
 
@@ -302,15 +302,20 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
     this.refreshIKChain()
   }
 
-  /** 체인 재수집 + 시각화 — 체인 관절 구·움직이는 링크를 노랑으로 (종원 2026-09-09).
-   *  링크 색 조건: 자식이 (체인∪엔드) 에 있고 부모가 체인 회전 관절일 때만 — 회전
-   *  관절 자신은 위치가 안 변하므로 그 위쪽 링크(예: hips→spine)는 원색 유지 */
+  /** 체인 재수집 + 시각화 — 루트~엔드를 한 줄 노랑 체인으로 (종원 2026-09-09).
+   *  보는 입장: 루트(기본 hips) 관절부터 IK 관절까지 구·링크 전부 노랑 — 조상 선택
+   *  칩과 화면 시작점이 일치한다. 실제 회전은 루트의 자식(체인)부터 — 루트 구와
+   *  루트→최상위 회전 관절 링크는 움직이지 않지만 시각적으로 포함 */
   private refreshIKChain() {
     this.ikChain = this.highlightBone ? this.walkIKAncestors(this.highlightBone, true) : []
     if (!this.jointMesh || !this.jointBones) return
     const chainSet = new Set<Object3D>(this.ikChain)
+    // filteredPairs 는 (본, 허용 조상) 직결이라 최상위 회전 관절의 pair 부모 = 루트(고정 경계)
+    const topJoint = this.ikChain[this.ikChain.length - 1]
+    const rootJoint = topJoint ? this.filteredPairs?.find(([bone]) => bone === topJoint)?.[1] : undefined
     for (let i = 0; i < this.jointBones.length; i++) {
-      this.jointMesh.setColorAt(i, chainSet.has(this.jointBones[i]) ? IK_CHAIN_JOINT_COLOR : JOINT_COLOR)
+      const b = this.jointBones[i]
+      this.jointMesh.setColorAt(i, chainSet.has(b) || b === rootJoint ? IK_CHAIN_JOINT_COLOR : JOINT_COLOR)
     }
     if (this.jointMesh.instanceColor) this.jointMesh.instanceColor.needsUpdate = true
     if (this.boneMesh && this.filteredPairs && this.pairIsFinger) {
@@ -318,7 +323,7 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
       if (this.highlightBone) moving.add(this.highlightBone)
       for (let i = 0; i < this.filteredPairs.length; i++) {
         const [bone, parent] = this.filteredPairs[i]
-        const inChain = moving.has(bone) && chainSet.has(parent)
+        const inChain = (moving.has(bone) && chainSet.has(parent)) || bone === topJoint
         this.boneMesh.setColorAt(
           i,
           inChain ? IK_CHAIN_BONE_COLOR : this.pairIsFinger[i] ? FINGER_BONE_COLOR : BODY_BONE_COLOR
