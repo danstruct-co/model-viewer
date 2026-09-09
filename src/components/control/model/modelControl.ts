@@ -252,6 +252,11 @@ export default class ModelControl {
     return this.skeletonHelper?.getIKAncestorNames() ?? []
   }
 
+  /** 편집 잠금 관절 원 본명(hips + 직속 body 자식) — 릭 선택 UI 빨간 표시·클릭 차단용 (종원 2026-09-09) */
+  getSkeletonIKLockedNames(): string[] {
+    return this.skeletonHelper?.getLockedJointNames() ?? []
+  }
+
   /** 관절 피킹 게이트 (종원 2026-09-09 모션 편집 모드) — 끄면 호버 잔상도 정리 */
   setSkeletonPickEnabled(enabled: boolean) {
     this.skeletonPickEnabled = enabled
