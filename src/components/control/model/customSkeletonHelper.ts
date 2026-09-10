@@ -595,6 +595,11 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
         this.jointMesh.setMatrixAt(i, _instanceMatrix)
       }
       this.jointMesh.instanceMatrix.needsUpdate = true
+      // 관절 인스턴스 위치가 매 프레임 바뀌므로 boundingSphere 재계산 필수 (종원 2026-09-10):
+      // InstancedMesh.raycast 는 boundingSphere 로 광선 교차 프리체크 후 인스턴스를 검사 —
+      // 갱신 안 하면 기본 포즈 구 밖으로 나간 말단 관절(뻗은 팔의 forearm/hand 등)의
+      // hover/클릭 피킹이 통째로 스킵된다(렌더는 frustumCulled=false 라 보임)
+      this.jointMesh.computeBoundingSphere()
     }
 
     if (this.highlightGizmo && this.highlightBone && this.highlightGizmo.visible) {
