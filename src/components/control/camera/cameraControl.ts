@@ -1,5 +1,6 @@
-import { type Object3D } from 'three'
+import { MOUSE, type Object3D } from 'three'
 import { cameraControlMode, cameraTargets } from './mapper'
+import { computeCameraFraming } from '../utils'
 import { CameraControlAction, CameraControlParams, CameraTarget, ControlMode } from './types'
 import type CoreNodeFinder from '../../../coreNodeFinder/coreNodeFinder'
 import { getCoreModels } from '../utils'
@@ -12,6 +13,8 @@ export default class CameraControl {
   private models: Object3D[] = []
   private coreNodeFinder: CoreNodeFinder
   private coreNode?: Object3D
+  /** 따라가기 멈춤 — 카메라 타깃을 바꿔 컨트롤이 새로 생겨도 유지 (종원 2026-09-15) */
+  private followPaused = false
 
   constructor(params: CameraControlParams) {
     this.params = params
@@ -41,7 +44,11 @@ export default class CameraControl {
       return
     }
 
-    this.params.orbitControl.mouseButtons = { LEFT: cameraControlMode[controlMode] }
+    // standardMouse(옵트인): 좌버튼 모드에 더해 우드래그 팬·휠 줌을 상시 바인딩 —
+    // 컨트롤 모드 라디오 UI 없이 마우스만으로 회전/팬/줌 (스튜디오 2026-09-08)
+    this.params.orbitControl.mouseButtons = this.params.option?.standardMouse
+      ? { LEFT: cameraControlMode[controlMode], MIDDLE: MOUSE.DOLLY, RIGHT: MOUSE.PAN }
+      : { LEFT: cameraControlMode[controlMode] }
     this.currentControlMode = controlMode
   }
 
@@ -53,12 +60,20 @@ export default class CameraControl {
     this.params.orbitControl.enableZoom = !value
   }
 
-  setTargetType(type: CameraTarget) {
+  setTargetType(type: CameraTarget, keepCamera = false) {
     this.control?.dispose()
     this.control = cameraTargets[type]({ ...this.params, coreNode: this.coreNode })
+    this.control.setFollowPaused?.(this.followPaused)
+    // cameraTarget(현재 상태)은 즉시 반영 — setTimeout 안에서 갱신하면 전환 직후
+    // 상태를 읽는 소비자(패널 토글 라이브 표시 등)가 이전 값을 본다
+    this.currentTarget = type
+    if (keepCamera) {
+      // 드래그로 follow 를 끄는 전환 등 — 리셋 스냅 없이 현재 카메라 그대로 이어간다
+      ;(this.control as { skipInitialReset?: () => void }).skipInitialReset?.()
+      return
+    }
     setTimeout(() => {
       this.control?.initialize()
-      this.currentTarget = type
     })
   }
 
@@ -79,6 +94,18 @@ export default class CameraControl {
     this.control?.resetPosition()
   }
 
+  /** 캐릭터 따라가기 멈춤 (종원 2026-09-15 루트 편집) — 루트를 옮겨도 카메라가 안 따라가 바닥 위 이동이 보이고, 기즈모 드래그 중
+   *  카메라가 같이 움직여 드래그가 어긋나는 것도 막는다 */
+  setFollowPaused(paused: boolean) {
+    this.followPaused = paused
+    this.control?.setFollowPaused?.(paused)
+  }
+
+  /** 리셋 카메라 구도의 기준점 — 축 기즈모 등 외부 피벗 소비자용 (follow/free 리셋과 동일 정의) */
+  getResetTarget() {
+    return computeCameraFraming(this.coreNode, this.params.scene, this.params.option?.heightFit ?? false)?.target ?? null
+  }
+
   updateOnFrame() {
     this.control?.updateOnFrame()
   }
@@ -89,5 +116,14 @@ export default class CameraControl {
 
   get cameraTarget() {
     return this.currentTarget
+  }
+
+  /** 카메라·orbit 컨트롤 직접 접근 — 뷰어 간 구도 복사 등 외부 소비자용 (스튜디오 편집 확인 카메라 동기화, 종원 2026-09-14) */
+  get camera() {
+    return this.params.camera
+  }
+
+  get orbitControl() {
+    return this.params.orbitControl
   }
 }

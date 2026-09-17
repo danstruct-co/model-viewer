@@ -76,9 +76,10 @@ export default class CoreNodeFinder {
   }
 
   private normalize(name: string) {
+    // \w 는 ASCII 전용이라 일본어 본명(センター 등)이 통째로 지워져 매칭 불능 — 유니코드 문자/숫자 보존
     return name
       .replace(/\s/g, '_')
-      .replace(/[^\w-]/g, '')
+      .replace(/[^\p{L}\p{N}_-]/gu, '')
       .toLowerCase()
   }
 

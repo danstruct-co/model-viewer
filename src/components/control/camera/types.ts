@@ -15,6 +15,8 @@ export type CameraControlAction = {
   resetPosition: () => void
   onStartControl: () => void
   onEndControl: () => void
+  /** 캐릭터 따라가기 멈춤 — follow 카메라만 (종원 2026-09-15 루트 편집) */
+  setFollowPaused?: (paused: boolean) => void
   coreNode?: Object3D
 }
 
@@ -31,5 +33,9 @@ export type CameraControlParams = {
     defaultPosition?: Vector3
     disableZoom?: boolean
     up?: Vector3
+    /** 표준 마우스 바인딩: 좌드래그 회전 + 우드래그 팬 + 휠 줌 */
+    standardMouse?: boolean
+    /** 캐릭터 키 기준 구도: 타깃 Y=키×0.55, 오프셋 키 비례 — MMD 센터(바닥 피벗) 대응 */
+    heightFit?: boolean
   }
 }
