@@ -15,6 +15,8 @@ export type CameraControlAction = {
   resetPosition: () => void
   onStartControl: () => void
   onEndControl: () => void
+  /** 캐릭터 따라가기 멈춤 — follow 카메라만 (종원 2026-09-15 루트 편집) */
+  setFollowPaused?: (paused: boolean) => void
   coreNode?: Object3D
 }
 

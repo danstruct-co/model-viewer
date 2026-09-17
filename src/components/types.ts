@@ -60,10 +60,23 @@ export type ModelViewerProps = {
     autoFit?: boolean
     defaultSkeletonHelper?: boolean
     /** 스켈레톤 헬퍼 표시 본 필터 (body 구+라인 / fingers 라인만) — 미지정 시 전체.
-     *  hips = IK 고정 베이스 본명 (체인이 절대 넘지 않는 경계, 2026-09-09) */
-    skeletonFilter?: { body: string[]; fingers?: string[]; hips?: string }
+     *  hips = IK 고정 베이스 본명 (체인이 절대 넘지 않는 경계, 2026-09-09).
+     *  lockedChainRoot = MMD spine1(腰) 추가 경계·잠금 (2026-09-10) */
+    skeletonFilter?: { body: string[]; fingers?: string[]; hips?: string; lockedChainRoot?: string; hingeJoints?: string[] }
     /** 관절 구 피킹 옵트인(스켈레톤 헬퍼 켜진 동안) — 호버 시 구 2배·클릭 시 본명 콜백 (2026-09-08) */
     onJointPick?: (boneName: string) => void
+    /** 관절 호버 — 이름 툴팁용. info=null 이면 해제, clientX/Y = 커서 위치 (종원 2026-09-10) */
+    onJointHover?: (info: { name: string; locked: boolean } | null, clientX: number, clientY: number) => void
+    /** 관절 우클릭 — 선택 관절의 조상이면 IK 루트 지정용 본명 콜백 (종원 2026-09-10) */
+    onJointRightPick?: (boneName: string) => void
+    /** 관절 기즈모 드래그 종료 — 선택 관절 위치(월드, 이동은 도달 위치로 클램프된 IK 타겟). 스튜디오 기즈모 조작
+     *  되돌리기 단계용 (종원 2026-09-14) */
+    onJointDragEnd?: (target: Vector3) => void
+    /** 루트 편집 기즈모로 캐릭터 루트 트랜스폼이 바뀔 때(드래그 중·끝) — 패널 값 표시·저장용 (종원 2026-09-15) */
+    onRootTransformChange?: (transform: import('./control/model/customSkeletonHelper').SkeletonRootTransform) => void
+    /** 위치 편집 기즈모 드래그 끝 (종원 2026-09-15) — 캐릭터(hips) 대상은 이때 스튜디오가 모든 프레임 키에 굽는다(드래그 중엔
+     *  지금 프레임 미리보기, onRootTransformChange 도 그대로 불려 패널 값을 갱신) */
+    onPositionEditDragEnd?: () => void
   }
   /**
    * 환경 기본 설정
@@ -92,6 +105,10 @@ export type ModelViewerProps = {
    * 소멸 시 callback
    */
   onDispose?: (control: ModelViewerControl) => void
+  /**
+   * 로드·렌더 에러 시 callback (뷰어 ErrorBoundary 포착 — 에러 화면은 그대로 표시)
+   */
+  onError?: (error: Error) => void
   /**
    * 로딩중일때 띄울 컴포넌트를 반환하는 함수, 로딩 상황을 위한 progress 값이 주어짐. 값 범위: 0 - 100
    */

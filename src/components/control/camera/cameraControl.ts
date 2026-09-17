@@ -13,6 +13,8 @@ export default class CameraControl {
   private models: Object3D[] = []
   private coreNodeFinder: CoreNodeFinder
   private coreNode?: Object3D
+  /** 따라가기 멈춤 — 카메라 타깃을 바꿔 컨트롤이 새로 생겨도 유지 (종원 2026-09-15) */
+  private followPaused = false
 
   constructor(params: CameraControlParams) {
     this.params = params
@@ -61,6 +63,7 @@ export default class CameraControl {
   setTargetType(type: CameraTarget, keepCamera = false) {
     this.control?.dispose()
     this.control = cameraTargets[type]({ ...this.params, coreNode: this.coreNode })
+    this.control.setFollowPaused?.(this.followPaused)
     // cameraTarget(현재 상태)은 즉시 반영 — setTimeout 안에서 갱신하면 전환 직후
     // 상태를 읽는 소비자(패널 토글 라이브 표시 등)가 이전 값을 본다
     this.currentTarget = type
@@ -91,6 +94,13 @@ export default class CameraControl {
     this.control?.resetPosition()
   }
 
+  /** 캐릭터 따라가기 멈춤 (종원 2026-09-15 루트 편집) — 루트를 옮겨도 카메라가 안 따라가 바닥 위 이동이 보이고, 기즈모 드래그 중
+   *  카메라가 같이 움직여 드래그가 어긋나는 것도 막는다 */
+  setFollowPaused(paused: boolean) {
+    this.followPaused = paused
+    this.control?.setFollowPaused?.(paused)
+  }
+
   /** 리셋 카메라 구도의 기준점 — 축 기즈모 등 외부 피벗 소비자용 (follow/free 리셋과 동일 정의) */
   getResetTarget() {
     return computeCameraFraming(this.coreNode, this.params.scene, this.params.option?.heightFit ?? false)?.target ?? null
@@ -106,5 +116,14 @@ export default class CameraControl {
 
   get cameraTarget() {
     return this.currentTarget
+  }
+
+  /** 카메라·orbit 컨트롤 직접 접근 — 뷰어 간 구도 복사 등 외부 소비자용 (스튜디오 편집 확인 카메라 동기화, 종원 2026-09-14) */
+  get camera() {
+    return this.params.camera
+  }
+
+  get orbitControl() {
+    return this.params.orbitControl
   }
 }

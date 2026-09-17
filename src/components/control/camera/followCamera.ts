@@ -16,6 +16,8 @@ export default class FollowCamera {
   // 업데이트에서 한 번 더 리셋해 스케일 반영된 bbox 로 구도를 잡는다
   private needsHeightRefit: boolean;
   private lastModelPosition = new Vector3();
+  // 따라가기 멈춤 (종원 2026-09-15 루트 편집) — 멈춘 동안도 기준 위치는 갱신해 풀 때 카메라가 튀지 않는다
+  private followPaused = false;
 
   constructor({ coreNode, camera, orbitControl, option, scene }: CameraControlParams) {
     this.coreNode = coreNode;
@@ -65,6 +67,10 @@ export default class FollowCamera {
   onStartControl = () => {};
   onEndControl = () => {};
 
+  setFollowPaused = (paused: boolean) => {
+    this.followPaused = paused;
+  };
+
   private followModel = () => {
     if (!this.coreNode) {
       return;
@@ -75,6 +81,9 @@ export default class FollowCamera {
 
     const delta = new Vector3().subVectors(modelWorldPosition, this.lastModelPosition);
     this.lastModelPosition.copy(modelWorldPosition);
+    if (this.followPaused) {
+      return;
+    }
 
     if (this.heightFit) {
       delta.y = 0; // 무대 카메라 — 수평만 추적 (점프·센터 본 상하 출렁 무시)
