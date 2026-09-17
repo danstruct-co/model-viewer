@@ -5,6 +5,7 @@ import { AxisGizmoViewport } from './axisGizmoViewport'
 import SharedSoftShadows from './sharedSoftShadows'
 import { Canvas, useFrame, useLoader, useThree } from '@react-three/fiber'
 import React, { Suspense, useEffect, useMemo, useRef, useState } from 'react'
+import type { State } from './control/animation/types'
 import { Color, MeshStandardMaterial, PCFSoftShadowMap, Raycaster, Vector2, Vector3 } from 'three'
 import AnimationControl from './control/animation/animationControl'
 import { OrbitControls as OrbitControlsImpl, Sky as SkyImpl } from 'three-stdlib'
@@ -120,8 +121,10 @@ const ModelViewer = React.forwardRef<HTMLCanvasElement, ModelViewerProps>(
       // 선택 관절 기즈모 (종원 2026-09-15 이동·회전 공통): 호버 = 핸들 굵고 밝게, 좌드래그 = 이동(축·가운데 흰 원 → IK 타겟) /
       // 회전(링·트랙볼 → 선택 관절). 픽·드래그 계산은 뷰어 헬퍼가 화면 px 로
       useEffect(() => {
-        // 관절 피킹/호버 콜백은 위 onJointPickRef·onJointHoverRef(라이브)로 읽는다 (종원 2026-09-10)
-        if (!modelSetting?.onJointPick && !modelSetting?.onJointHover && !modelSetting?.onJointRightPick) return
+        // 관절 피킹/호버 콜백은 위 onJointPickRef·onJointHoverRef(라이브)로 읽는다 (종원 2026-09-10).
+        // 등록 자체를 콜백 유무로 막지 않는다 — deps 가 [] 라 마운트 시점 값으로 막으면 나중에 콜백을 붙인
+        // 소비자는 리스너가 영영 안 붙고 에러도 안 난다(url 이 안 바뀌면 재마운트도 없다). 대신 각 핸들러
+        // 선두에서 ref 를 보고 빠진다 (파트라슈 리뷰 2026-09-17)
         const dom = gl.domElement
         const raycaster = new Raycaster()
         const pointer = new Vector2()
@@ -256,13 +259,15 @@ const ModelViewer = React.forwardRef<HTMLCanvasElement, ModelViewerProps>(
         dom.addEventListener('pointerleave', onLeave)
         dom.addEventListener('contextmenu', onContext)
         // 재생 재개 = IK 타겟 해제 (홀드 포즈는 mixer 원 포즈로 복귀) — 종원 2026-09-08
-        animationControlRef.current?.addStateChangeListener((state) => {
+        const onAnimationState = (state: State) => {
           if (state === 'play') {
             dragging = false // 기즈모 드래그 상태는 clearSkeletonIK 가 정리 (종원 2026-09-14)
             if (orbitControlRef.current) orbitControlRef.current.enabled = true
             modelControlRef.current?.clearSkeletonIK()
           }
-        })
+        }
+        const animationControl = animationControlRef.current
+        animationControl?.addStateChangeListener(onAnimationState)
         return () => {
           dom.removeEventListener('pointermove', onMove)
           dom.removeEventListener('pointerdown', onDown)
@@ -270,6 +275,8 @@ const ModelViewer = React.forwardRef<HTMLCanvasElement, ModelViewerProps>(
           dom.removeEventListener('pointerleave', onLeave)
           dom.removeEventListener('contextmenu', onContext)
           dom.style.cursor = ''
+          // 등록 당시 인스턴스에서 해제 — ref 를 다시 읽으면 그새 교체된 인스턴스를 건드린다
+          animationControl?.removeStateChangeListener(onAnimationState)
         }
       }, [])
 
@@ -369,7 +376,8 @@ const ModelViewer = React.forwardRef<HTMLCanvasElement, ModelViewerProps>(
           {cameraSetting?.axisGizmo && (
             /* 월드 좌표축 기즈모 (Blender 식, 종원 2026-09-08): 축 클릭 시 **리셋 카메라
                기준점**(heightFit 타깃) 피벗으로 그 방향 뷰 트윈 — 거리는 현재 줌 유지.
-               비-makeDefault OrbitControls 라 피벗 갱신은 onTarget 에서 직접 수행 */
+               OrbitControls 는 makeDefault 지만 target 은 여기서 직접 갱신한다 — GizmoHelper 가 주는
+               기본 피벗(원점)이 아니라 heightFit 기준점을 써야 하기 때문 */
             <GizmoHelper
               alignment="top-right"
               margin={[50, 50]}

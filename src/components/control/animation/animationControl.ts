@@ -77,6 +77,12 @@ export default class AnimationControl {
     this.stateChangedListeners.push(listener)
   }
 
+  /** 등록한 리스너 해제 — 소비자 cleanup 용. 없으면 인스턴스가 재사용될 때 클로저가 살아남아 누수가 된다 */
+  removeStateChangeListener(listener: (state: State) => void) {
+    const index = this.stateChangedListeners.indexOf(listener)
+    if (index >= 0) this.stateChangedListeners.splice(index, 1)
+  }
+
   addTimeUpdateListener(listener: (time: number) => void) {
     this.timeUpdateListeners.push(listener)
   }

@@ -915,7 +915,9 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
 
   private applyPose(pose: Float64Array) {
     if (!this.jointBones || pose.length !== this.poseLength()) return
-    this.jointBones.forEach((bone, i) => bone.quaternion.fromArray(pose, i * 4))
+    // three 0.167+ 는 fromArray 첫 인자를 QuaternionTuple 로 좁혔다 — 0.162 에서는 ArrayLike 라 통과하지만
+    // 소비자가 three 를 올리면 TS2345 로 깨진다. 런타임 동작은 동일하므로 캐스팅으로 막는다 (파트라슈 리뷰 2026-09-17)
+    this.jointBones.forEach((bone, i) => bone.quaternion.fromArray(pose as unknown as number[], i * 4))
     this.hipsBone?.position.fromArray(pose, this.jointBones.length * 4)
     // 솔브·기즈모가 관절 matrixWorld 를 바로 읽으므로 body 서브트리 행렬 갱신 (hips 부모는 편집 대상이 아니라 행렬 유효)
     ;(this.hipsBone ?? this.root).updateMatrixWorld(true)

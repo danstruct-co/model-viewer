@@ -50,6 +50,8 @@ function AxisHead({
     context.fillText(label, 32, 40)
     return new CanvasTexture(canvas)
   }, [arcStyle, label])
+  // 축 6개 × 뷰어마다 새로 만들어지는 GPU 텍스처 — 스튜디오처럼 뷰어를 여닫으면 쌓인다 (파트라슈 리뷰 2026-09-17)
+  React.useEffect(() => () => texture.dispose(), [texture])
   const [active, setActive] = React.useState(false)
   const scale = (active ? 1.2 : 1) * HEAD_SCALE
   return (
