@@ -344,6 +344,7 @@ const ModelViewer = React.forwardRef<HTMLCanvasElement, ModelViewerProps>(
           option: {
             defaultBackground: environmentSetting?.defaultBackground,
             defaultGridActive: environmentSetting?.defaultActiveGrid,
+            gridAxes: environmentSetting?.gridAxes,
             defaultShadowActive: environmentSetting?.defaultActiveShadow,
           },
         })
