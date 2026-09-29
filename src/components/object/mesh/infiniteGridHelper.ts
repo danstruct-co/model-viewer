@@ -1,6 +1,9 @@
 import { Color, ColorRepresentation, DoubleSide, Mesh, PlaneGeometry, ShaderMaterial } from 'three'
 import { AXIS_COLORS } from '../../control/model/screenGizmo'
 
+// 축 선 진하기 — 0.9 는 순수 빨강·파랑이 너무 진했다 (종원 2026-09-29 "살짝 흐리게")
+const AXIS_LINE_OPACITY = 0.5
+
 export interface InfiniteGridHelperOptions {
   size1?: number
   size2?: number
@@ -31,6 +34,7 @@ export class InfiniteGridHelper extends Mesh {
         uAxisLines: { value: axisLines ? 1 : 0 },
         uAxisColorA: { value: axisColor(planeAxes[0]) },
         uAxisColorB: { value: axisColor(planeAxes[1]) },
+        uAxisOpacity: { value: AXIS_LINE_OPACITY },
       },
       transparent: true,
       depthWrite: false, // Don't write to depth buffer
@@ -57,6 +61,7 @@ export class InfiniteGridHelper extends Mesh {
         uniform float uAxisLines;
         uniform vec3 uAxisColorA;
         uniform vec3 uAxisColorB;
+        uniform float uAxisOpacity;
         
         // 원점을 지나는 축 선 — 화면에서 1.5px 폭(안티에일리어싱), 멀어지면 격자처럼 흐려진다
         float axisLine(float coord) {
@@ -97,9 +102,9 @@ export class InfiniteGridHelper extends Mesh {
             float lineA = axisLine(worldPosition.${planeAxes[1]}) * fade; // 첫 축 선 = 둘째 좌표가 0 인 곳
             float lineB = axisLine(worldPosition.${planeAxes[0]}) * fade; // 둘째 축 선 = 첫 좌표가 0 인 곳
             rgb = mix(rgb, uAxisColorA, lineA);
-            alpha = max(alpha, lineA * 0.9);
+            alpha = max(alpha, lineA * uAxisOpacity);
             rgb = mix(rgb, uAxisColorB, lineB);
-            alpha = max(alpha, lineB * 0.9);
+            alpha = max(alpha, lineB * uAxisOpacity);
           }
           
           gl_FragColor = vec4(rgb, alpha);
