@@ -94,6 +94,7 @@ const _ikQuat = new Quaternion()
 const _reachA = new Vector3()
 const _reachB = new Vector3()
 const _pinPos = new Vector3()
+const _effQuat = new Quaternion() // 이펙터 캡처 — 솔브 중 _pinQuat 이 덮이므로 따로 둔다
 const _pinQuat = new Quaternion()
 const _pinScale = new Vector3()
 // hinge 제약 (무릎·팔꿈치, 종원 2026-09-10): IK 시 단일축 굽힘 + 역굽힘 한계
@@ -1126,15 +1127,31 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
       pin.effector.updateWorldMatrix(true, false)
       pin.effector.matrixWorld.decompose(pin.pos, pin.quat, _pinScale)
     }
+    // 선택한 관절(이펙터) 자체는 월드 방향을 지킨다 (종원 2026-09-30 "head 본을 잡고 움직이면 머리는 그대로였으면") — CCD 는 이펙터를
+    // 안 돌리지만 부모(목·척추)가 돌면 월드에선 따라 돌았다. 드래그 시작 방향(restoreIKBase 뒤)을 잡아 두고 풀고 나서 되돌린다.
+    // 회전 모드는 ikFrozenPose 로 직접 돌리므로 여기를 안 탄다.
+    // 예외 = hinge(팔꿈치·무릎)를 직접 잡은 경우: 아래팔 방향을 월드에 고정하면 위팔이 돌 때 굽힘이 평면 밖으로 나가고
+    // 역굽힘이 생긴다(하네스 −13.9°, 파트라슈 리뷰 2026-09-30) → 예전처럼 부모를 따라간다(굽힘각 유지)
+    const keepEffectorWorld = !this.hingeBoneSet.has(this.highlightBone)
+    if (keepEffectorWorld) {
+      this.highlightBone.updateWorldMatrix(true, false)
+      this.highlightBone.matrixWorld.decompose(_pinPos, _effQuat, _pinScale)
+    }
     this.solveChain(this.ikChain, this.highlightBone, this.targetWorld)
+    if (keepEffectorWorld) this.restoreWorldQuaternion(this.highlightBone, _effQuat)
     for (const pin of this.ikPinned) {
       if (pin.chain.length > 0) this.solveChain(pin.chain, pin.effector, pin.pos)
-      // 이펙터 월드 방향 복원 — 로컬 회전 = 부모 월드 회전⁻¹ × 캡처 월드 회전
-      if (!pin.effector.parent) continue
-      pin.effector.parent.matrixWorld.decompose(_pinPos, _pinQuat, _pinScale)
-      pin.effector.quaternion.copy(_pinQuat.invert()).multiply(pin.quat)
-      pin.effector.updateMatrixWorld(true)
+      this.restoreWorldQuaternion(pin.effector, pin.quat)
     }
+  }
+
+  /** 관절의 월드 방향을 캡처값으로 되돌린다 — 로컬 회전 = 부모 월드 회전⁻¹ × 캡처 월드 회전.
+   *  부모 월드 행렬은 solveChain 이 관절마다 갱신해 두므로 최신이다 */
+  private restoreWorldQuaternion(bone: Bone, worldQuat: Quaternion) {
+    if (!bone.parent) return
+    bone.parent.matrixWorld.decompose(_pinPos, _pinQuat, _pinScale)
+    bone.quaternion.copy(_pinQuat.invert()).multiply(worldQuat)
+    bone.updateMatrixWorld(true)
   }
 
   /** 선택 관절 하이라이트 — 릭 선택 UI 와 연동 (종원 2026-09-08). name null 이면 해제.
