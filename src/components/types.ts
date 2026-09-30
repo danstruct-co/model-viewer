@@ -85,6 +85,8 @@ export type ModelViewerProps = {
     defaultBackground?: BackgroundType
     defaultActiveGrid?: boolean
     defaultActiveShadow?: boolean
+    /** 격자에 원점 축 선(x 빨강·z 파랑, 블렌더처럼 — 종원 2026-09-29). 기본 꺼짐 */
+    gridAxes?: boolean
   }
   /**
    * 오디오 기본 설정

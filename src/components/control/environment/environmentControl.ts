@@ -14,12 +14,14 @@ export default class EnvironmentControl {
   private currentType: BackgroundType = 'default'
   private isActiveGrid: boolean = false
   private isActiveShadow: boolean = false
+  private gridAxes: boolean
 
   constructor({ scene, color, sky, ground, option }: EnvironmentControlParams) {
     this.scene = scene
     this.backgroundColor = color
     this.sky = sky
     this.ground = ground
+    this.gridAxes = !!option?.gridAxes // 아래 setGridActive 가 격자를 만들기 전에
 
     this.setBackground(option?.defaultBackground ?? 'default')
     this.setGridActive(!!option?.defaultGridActive)
@@ -79,6 +81,7 @@ export default class EnvironmentControl {
       size2: 1,
       color: gridColor,
       distance: 200,
+      axisLines: this.gridAxes,
     })
     this.scene.add(this.gridHelper)
     this.scene.userData.gridHelper = this.gridHelper

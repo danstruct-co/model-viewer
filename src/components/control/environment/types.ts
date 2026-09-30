@@ -17,6 +17,8 @@ export type EnvironmentControlParams = {
   option?: {
     defaultBackground?: BackgroundType
     defaultGridActive?: boolean
+    /** 격자에 원점 축 선(x 빨강·z 파랑) — InfiniteGridHelper axisLines */
+    gridAxes?: boolean
     defaultShadowActive?: boolean
     defaultSkyVisible?: boolean
   }

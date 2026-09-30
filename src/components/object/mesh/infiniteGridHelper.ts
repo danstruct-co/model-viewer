@@ -1,4 +1,8 @@
 import { Color, ColorRepresentation, DoubleSide, Mesh, PlaneGeometry, ShaderMaterial } from 'three'
+import { AXIS_COLORS } from '../../control/model/screenGizmo'
+
+// 축 선 진하기 — 0.9 는 순수 빨강·파랑이 너무 진했다 (종원 2026-09-29 "살짝 흐리게")
+const AXIS_LINE_OPACITY = 0.5
 
 export interface InfiniteGridHelperOptions {
   size1?: number
@@ -6,14 +10,17 @@ export interface InfiniteGridHelperOptions {
   color?: ColorRepresentation
   distance?: number
   axes?: string
+  /** 원점을 지나는 축 선 (종원 2026-09-29 "원점이 어디인지 블렌더처럼") — 평면 두 축을 축 표시와 같은 RGB 로. 기본 꺼짐 */
+  axisLines?: boolean
 }
 
 export class InfiniteGridHelper extends Mesh {
   constructor(options: InfiniteGridHelperOptions = {}) {
-    const { size1 = 10, size2 = 100, color = 'white', distance = 8000, axes = 'xzy' } = options
+    const { size1 = 10, size2 = 100, color = 'white', distance = 8000, axes = 'xzy', axisLines = false } = options
 
     const colorObj = color instanceof Color ? color : new Color(color)
     const planeAxes = axes.substr(0, 2)
+    const axisColor = (axis: string) => new Color(AXIS_COLORS['xyz'.indexOf(axis)])
 
     const geometry = new PlaneGeometry(2, 2, 1, 1)
 
@@ -24,6 +31,10 @@ export class InfiniteGridHelper extends Mesh {
         uSize2: { value: size2 },
         uColor: { value: colorObj },
         uDistance: { value: distance },
+        uAxisLines: { value: axisLines ? 1 : 0 },
+        uAxisColorA: { value: axisColor(planeAxes[0]) },
+        uAxisColorB: { value: axisColor(planeAxes[1]) },
+        uAxisOpacity: { value: AXIS_LINE_OPACITY },
       },
       transparent: true,
       depthWrite: false, // Don't write to depth buffer
@@ -47,6 +58,15 @@ export class InfiniteGridHelper extends Mesh {
         uniform float uSize2;
         uniform vec3 uColor;
         uniform float uDistance;
+        uniform float uAxisLines;
+        uniform vec3 uAxisColorA;
+        uniform vec3 uAxisColorB;
+        uniform float uAxisOpacity;
+        
+        // 원점을 지나는 축 선 — 화면에서 1.5px 폭(안티에일리어싱), 멀어지면 격자처럼 흐려진다
+        float axisLine(float coord) {
+          return 1.0 - smoothstep(0.0, 1.5, abs(coord) / max(fwidth(coord), 0.0001));
+        }
         
         float getGrid(float size) {
           vec2 r = worldPosition.${planeAxes} / size;
@@ -75,7 +95,19 @@ export class InfiniteGridHelper extends Mesh {
           float finalAlpha = mix(g2, g1, g1) * pow(d, 2.0); // Reduced power for smoother fade
           finalAlpha = mix(0.3 * finalAlpha, finalAlpha, g2); // Less aggressive mixing
           
-          gl_FragColor = vec4(uColor.rgb, finalAlpha);
+          vec3 rgb = uColor.rgb;
+          float alpha = finalAlpha;
+          if (uAxisLines > 0.5) {
+            float fade = pow(d, 2.0);
+            float lineA = axisLine(worldPosition.${planeAxes[1]}) * fade; // 첫 축 선 = 둘째 좌표가 0 인 곳
+            float lineB = axisLine(worldPosition.${planeAxes[0]}) * fade; // 둘째 축 선 = 첫 좌표가 0 인 곳
+            rgb = mix(rgb, uAxisColorA, lineA);
+            alpha = max(alpha, lineA * uAxisOpacity);
+            rgb = mix(rgb, uAxisColorB, lineB);
+            alpha = max(alpha, lineB * uAxisOpacity);
+          }
+          
+          gl_FragColor = vec4(rgb, alpha);
           
           if (gl_FragColor.a <= 0.01) discard; // Higher threshold to reduce noise
         }
