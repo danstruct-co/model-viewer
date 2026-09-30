@@ -94,6 +94,8 @@ const _ikQuat = new Quaternion()
 const _reachA = new Vector3()
 const _reachB = new Vector3()
 const _pinPos = new Vector3()
+const _effPos = new Vector3()
+const _effQuat = new Quaternion()
 const _pinQuat = new Quaternion()
 const _pinScale = new Vector3()
 // hinge 제약 (무릎·팔꿈치, 종원 2026-09-10): IK 시 단일축 굽힘 + 역굽힘 한계
@@ -1126,7 +1128,17 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
       pin.effector.updateWorldMatrix(true, false)
       pin.effector.matrixWorld.decompose(pin.pos, pin.quat, _pinScale)
     }
+    // 선택한 관절(이펙터) 자체는 월드 방향을 지킨다 (종원 2026-09-30 "head 본을 잡고 움직이면 머리는 그대로였으면") — CCD 는 이펙터를
+    // 안 돌리지만 부모(목·척추)가 돌면 월드에선 따라 돌았다. 드래그 시작 방향(restoreIKBase 뒤)을 잡아 두고 풀고 나서 되돌린다.
+    // 회전 모드는 ikFrozenPose 로 직접 돌리므로 여기를 안 탄다
+    this.highlightBone.updateWorldMatrix(true, false)
+    this.highlightBone.matrixWorld.decompose(_effPos, _effQuat, _pinScale)
     this.solveChain(this.ikChain, this.highlightBone, this.targetWorld)
+    if (this.highlightBone.parent) {
+      this.highlightBone.parent.matrixWorld.decompose(_pinPos, _pinQuat, _pinScale)
+      this.highlightBone.quaternion.copy(_pinQuat.invert()).multiply(_effQuat)
+      this.highlightBone.updateMatrixWorld(true)
+    }
     for (const pin of this.ikPinned) {
       if (pin.chain.length > 0) this.solveChain(pin.chain, pin.effector, pin.pos)
       // 이펙터 월드 방향 복원 — 로컬 회전 = 부모 월드 회전⁻¹ × 캡처 월드 회전
