@@ -80,9 +80,16 @@ const rootEdits = new WeakMap<Object3D, { position: Vector3; quaternion: Quatern
 // mixer 가 매 프레임 원 포즈를 재적용하므로 홀드는 "원 포즈 → CCD" 를 매 프레임 반복 —
 // 결과가 프레임 간 일관돼 지터 없음
 const IK_ITERATIONS = 8
+// CCD 스텝 안정화 (2026-09-30, 하네스 ikStability.test.ts 실측): 감쇠 없는 setFromUnitVectors 는 타겟이 관절을 지나거나
+// (어깨 통과 → LeftArm 180°/프레임) 이펙터 반대편에 오면(몸 뒤 반대편 → 팔꿈치 118~140°/프레임) 한 반복에 통째로 뒤집혀
+// 드래그 중 중간 관절이 튄다. ① 반복당 관절 회전 상한 ② 타겟이 관절에 가까울수록 회전 기여 축소(특이점 감쇠 — 그 관절이
+// 돌아도 이펙터가 타겟에 못 가는 상황) ③ hinge 는 굽힘 평면에서 부호 있는 각을 직접 계산(반대편 타겟에서 임의 축 180° 회전 →
+// twist 투영이 부호를 잃는 경로 제거). 회전 상한은 반복 수와 곱해 프레임당 도달 한계(8×25°=200°)를 정한다
+const IK_MAX_STEP = (25 * Math.PI) / 180
 const _ikInvJoint = new Matrix4()
 const _ikEffLocal = new Vector3()
 const _ikTgtLocal = new Vector3()
+const _ikAxis = new Vector3()
 const _ikQuat = new Quaternion()
 const _reachA = new Vector3()
 const _reachB = new Vector3()
@@ -173,6 +180,8 @@ export type SkeletonBoneFilter = {
   lockedChainRoot?: string
   /** hinge 관절 본명(무릎·팔꿈치, 종원 2026-09-10) — IK 시 단일축으로만 굽고 역굽힘 제한 */
   hingeJoints?: string[]
+  /** 머리 본명 (2026-09-30) — 다른 관절 IK 로 척추가 돌아도 머리는 **월드 방향 유지**(시선 보존). 미지정이면 머리가 척추를 따라 돈다 */
+  head?: string
 }
 
 /**
@@ -228,8 +237,10 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
   private lockedChainRootBone?: Bone
   /** hinge 관절(무릎·팔꿈치) 집합 — IK 시 단일축 굽힘 제약 (종원 2026-09-10) */
   private hingeBoneSet = new Set<Object3D>()
+  /** 머리 본 — IK 중 월드 방향 유지 대상 (2026-09-30). 선택 관절·체인에 들면 유지 안 함 */
+  private headBone?: Bone
   /** hinge 관절별 IK 시작 시점 캡처: 굽힘축(로컬)·기준 로컬회전·기준 굽힘각·자식뼈 */
-  private hingeState = new Map<Object3D, { axisLocal: Vector3; refQuat: Quaternion; bendRef: number }>()
+  private hingeState = new Map<Object3D, HingeState>()
   /** 지정 IK 루트 — 체인의 최상위 회전 관절(포함, 제자리 회전). 미지정 = hips 직전 최상위 */
   private ikRootBone?: Bone
   /** 현재 선택 기준 IK 체인 (선택 관절의 부모부터 루트까지, 가까운 순) — refreshIKChain 갱신 */
@@ -294,6 +305,10 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
       if (filter.hingeJoints?.length) {
         const hingeSet = toNameSet(filter.hingeJoints)
         for (const bone of this.bones) if (hingeSet.has(bone.name)) this.hingeBoneSet.add(bone)
+      }
+      if (filter.head) {
+        const headSet = toNameSet([filter.head])
+        this.headBone = this.bones.find((bone) => headSet.has(bone.name))
       }
       this.lockedJointNames = Array.from(this.lockedJointSet).map((bone) => (bone as Bone).name)
       // 잠금셋·hips 확정 후 기본색(잠금 회색·hips 분홍)으로 재색칠 — applyBoneFilter 는 잠금셋 채워지기 전에
@@ -465,12 +480,21 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
           path.push(kids[0])
           kids = bodyChildren(kids[0])
         }
+        const effector = path[path.length - 1]
         this.ikPinned.push({
-          chain: path.slice(0, -1).reverse(), // 이펙터에서 가까운 순 (CCD 문법)
-          effector: path[path.length - 1],
+          // 이펙터에서 가까운 순 (CCD 문법). 머리는 방향만 유지 — 목 한 관절로 머리 위치까지 붙잡으면 루트가 조금만 돌아도
+          // 목이 크게 꺾인다(하네스 실측 목 114°, 2026-09-30). 위치는 척추를 따라가고 시선만 보존
+          chain: effector === this.headBone ? [] : path.slice(0, -1).reverse(),
+          effector,
           pos: new Vector3(),
           quat: new Quaternion(),
         })
+      }
+      // 머리 월드 방향 유지 (2026-09-30): 루트의 자식 서브트리가 아니어도(기본 루트 = hips 직전 척추 → 목이 체인 중간 관절에
+      // 붙음) 척추가 돌면 머리가 따라 돌았다("손을 끌었는데 머리가 돌아간다"). 선택 관절·체인 소속이 아니면 방향만 원복
+      const head = this.headBone
+      if (head && head !== this.highlightBone && !this.ikChain.includes(head) && !this.ikPinned.some((pin) => pin.effector === head)) {
+        this.ikPinned.push({ chain: [], effector: head, pos: new Vector3(), quat: new Quaternion() })
       }
     }
     if (!this.jointMesh || !this.jointBones) return
@@ -564,33 +588,93 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
   private applyHingeConstraint(joint: Bone) {
     const hs = this.hingeState.get(joint)
     if (!hs) return
-    _hgRel.copy(hs.refQuat).invert().multiply(joint.quaternion) // rel = 기준 대비 로컬 회전
-    _hgVec.set(_hgRel.x, _hgRel.y, _hgRel.z)
-    let theta = 2 * Math.atan2(_hgVec.dot(hs.axisLocal), _hgRel.w) // 굽힘축 twist 각도(부호)
-    if (theta > Math.PI) theta -= 2 * Math.PI
-    else if (theta < -Math.PI) theta += 2 * Math.PI
-    const minT = -(hs.bendRef + HINGE_HYPEREXTEND) // 직립(φ=0)에서 -10° 까지
-    const maxT = Math.max(0, HINGE_MAX_BEND - hs.bendRef)
-    const clamped = Math.min(maxT, Math.max(minT, theta))
+    const theta = hingeTwist(joint, hs)
+    const clamped = Math.min(hingeMaxTwist(hs), Math.max(hingeMinTwist(hs), theta))
     _hgTwist.setFromAxisAngle(hs.axisLocal, clamped)
     joint.quaternion.copy(hs.refQuat).multiply(_hgTwist) // 단일축 + 클램프 결과로 대체
   }
 
-  /** CCD — chain 은 이펙터에서 가까운 순. 메인 체인·핀 보정 체인 공용 */
+  /** CCD — chain 은 이펙터에서 가까운 순. 메인 체인·핀 보정 체인 공용.
+   *  hinge(팔꿈치·무릎) 바로 위에 회전 관절(어깨·허벅지)이 체인에 있으면 그 둘은 2-bone 해석으로 푼다 (2026-09-30):
+   *  hinge 굽힘각 = 어깨→타겟 거리의 코사인 법칙, 어깨는 CCD swing. 그리디 CCD 는 hinge 가 "타겟을 가리키는" 방향으로만 굽어
+   *  팔을 곧게 펴고 어깨·척추가 나머지를 떠안는 국소 최소(err 10~60mm)와 접힘 해 사이를 타겟이 조금 움직일 때마다 오갔다
+   *  (하네스 실측: 어깨 중심 원호에서 팔꿈치 49°→14° 점프, 몸 뒤로 당김 err 59mm 정체 → 한 프레임에 +104°) */
   private solveChain(chain: Bone[], effectorBone: Bone, targetWorld: Vector3) {
     for (let iter = 0; iter < IK_ITERATIONS; iter++) {
-      for (const joint of chain) {
-        // 관절 로컬 공간에서 이펙터→타겟 방향으로 회전 (three CCDIKSolver 문법)
-        _ikInvJoint.copy(joint.matrixWorld).invert()
-        _ikEffLocal.setFromMatrixPosition(effectorBone.matrixWorld).applyMatrix4(_ikInvJoint).normalize()
-        _ikTgtLocal.copy(targetWorld).applyMatrix4(_ikInvJoint).normalize()
-        if (_ikEffLocal.lengthSq() < 1e-10 || _ikTgtLocal.lengthSq() < 1e-10) continue
-        _ikQuat.setFromUnitVectors(_ikEffLocal, _ikTgtLocal)
-        joint.quaternion.multiply(_ikQuat)
-        this.applyHingeConstraint(joint) // 무릎·팔꿈치면 단일축 굽힘 + 역굽힘 제한 (종원 2026-09-10)
-        joint.updateMatrixWorld(true) // 서브트리(이펙터 포함) 즉시 갱신
+      for (let i = 0; i < chain.length; i++) {
+        const joint = chain[i]
+        const hs = this.hingeState.get(joint)
+        if (hs && i + 1 < chain.length) {
+          this.bendHingeForReach(joint, hs, chain[i + 1], effectorBone, targetWorld)
+          continue // 이어서 부모 관절이 swing
+        }
+        this.ccdStep(joint, effectorBone, targetWorld)
       }
     }
+  }
+
+  /** CCD 한 스텝 — joint 를 로컬 공간에서 이펙터→타겟 방향으로 회전 (three CCDIKSolver 문법 + 감쇠·상한·hinge 평면 각) */
+  private ccdStep(joint: Bone, effectorBone: Bone, targetWorld: Vector3) {
+    _ikInvJoint.copy(joint.matrixWorld).invert()
+    _ikEffLocal.setFromMatrixPosition(effectorBone.matrixWorld).applyMatrix4(_ikInvJoint)
+    _ikTgtLocal.copy(targetWorld).applyMatrix4(_ikInvJoint)
+    const distEff = _ikEffLocal.length()
+    const distTgt = _ikTgtLocal.length()
+    if (distEff < 1e-5 || distTgt < 1e-5) return
+    _ikEffLocal.divideScalar(distEff)
+    _ikTgtLocal.divideScalar(distTgt)
+    // 특이점 감쇠: 타겟이 이펙터보다 관절에 가까우면 그 비율만큼만 — 관절 바로 옆을 지나는 타겟에 방향이 뒤집혀도 회전이 0 으로 이어진다
+    const damping = Math.min(1, distTgt / distEff)
+    const hs = this.hingeState.get(joint)
+    if (hs) {
+      // hinge 가 체인 최상위(루트 = 팔꿈치 지정)인 경우: 굽힘 평면(축 수직)에 투영한 부호 있는 각 = 이 축만 돌릴 때 거리 최소점
+      _ikEffLocal.addScaledVector(hs.axisLocal, -_ikEffLocal.dot(hs.axisLocal))
+      _ikTgtLocal.addScaledVector(hs.axisLocal, -_ikTgtLocal.dot(hs.axisLocal))
+      if (_ikEffLocal.lengthSq() < 1e-10 || _ikTgtLocal.lengthSq() < 1e-10) return
+      _ikAxis.crossVectors(_ikEffLocal, _ikTgtLocal)
+      const cur = hingeTwist(joint, hs)
+      let want = cur + Math.atan2(_ikAxis.dot(hs.axisLocal), _ikEffLocal.dot(_ikTgtLocal))
+      const minT = hingeMinTwist(hs)
+      const maxT = hingeMaxTwist(hs)
+      if (want < minT || want > maxT) {
+        // 최소점이 굽힘 범위 밖 — 거리는 각도의 코사인이라 원 위에서 각거리가 가까운 끝점이 최적. 타겟이 이펙터 정반대(±180°)
+        // 근처일 때 단순 클램프는 부호 하나로 접힘(175°) ↔ 과신전(-10°) 을 오가며 튀었다(하네스 실측 팔꿈치 82~118°/프레임)
+        want = angularDistance(want, minT) <= angularDistance(want, maxT) ? minT : maxT
+      }
+      const delta = Math.max(-IK_MAX_STEP, Math.min(IK_MAX_STEP, (want - cur) * damping))
+      _ikQuat.setFromAxisAngle(hs.axisLocal, delta)
+    } else {
+      _ikAxis.crossVectors(_ikEffLocal, _ikTgtLocal)
+      const sinA = _ikAxis.length()
+      // 정반대(회전축 부정) — 이 관절은 이번 반복 건너뜀. 다른 관절이 이펙터를 축에서 벗어나게 하면 다음 반복에 이어 받는다
+      if (sinA < 1e-6) return
+      _ikAxis.divideScalar(sinA)
+      const angle = Math.min(IK_MAX_STEP, Math.atan2(sinA, _ikEffLocal.dot(_ikTgtLocal)) * damping)
+      _ikQuat.setFromAxisAngle(_ikAxis, angle)
+    }
+    joint.quaternion.multiply(_ikQuat).normalize()
+    this.applyHingeConstraint(joint) // 무릎·팔꿈치면 단일축 굽힘 + 역굽힘 제한 (종원 2026-09-10)
+    joint.updateMatrixWorld(true) // 서브트리(이펙터 포함) 즉시 갱신
+  }
+
+  /** 2-bone 해석 굽힘 (2026-09-30): hinge 굽힘각을 부모 관절(어깨·허벅지)→타겟 거리 d 로 직접 정한다 — 코사인 법칙
+   *  cos γ = (L1²+L2²−d²)/(2·L1·L2), 굽힘 = π−γ (0 = 곧게). 부모가 이어서 swing 하면 |부모→이펙터| = d 라 정확히 닿는다.
+   *  타겟이 팔 길이 밖/안쪽이면 코사인 클램프 = 완전 신전/최대 접힘. 굽힘 방향(팔꿈치가 향하는 쪽)은 기준 포즈의 것을 그대로
+   *  쓴다(pole 없음) — 프레임마다 기준 포즈에서 다시 풀므로 타겟만의 함수라 프레임 간 연속 */
+  private bendHingeForReach(hinge: Bone, hs: HingeState, parentJoint: Bone, effectorBone: Bone, targetWorld: Vector3) {
+    _hgPP.setFromMatrixPosition(parentJoint.matrixWorld)
+    _hgPJ.setFromMatrixPosition(hinge.matrixWorld)
+    _hgPC.setFromMatrixPosition(effectorBone.matrixWorld)
+    const l1 = _hgPP.distanceTo(_hgPJ)
+    const l2 = _hgPJ.distanceTo(_hgPC)
+    if (l1 < 1e-5 || l2 < 1e-5) return
+    const d = _hgPP.distanceTo(targetWorld)
+    const cosGamma = Math.min(1, Math.max(-1, (l1 * l1 + l2 * l2 - d * d) / (2 * l1 * l2)))
+    const bend = Math.PI - Math.acos(cosGamma)
+    const twist = Math.min(hingeMaxTwist(hs), Math.max(hingeMinTwist(hs), bend - hs.bendRef))
+    _hgTwist.setFromAxisAngle(hs.axisLocal, twist)
+    hinge.quaternion.copy(hs.refQuat).multiply(_hgTwist)
+    hinge.updateMatrixWorld(true)
   }
 
   /** 관절 구 레이캐스트 피킹 — 맞은 관절의 본명/인덱스/잠금여부 (2026-09-08 릭 선택 연동).
@@ -1233,6 +1317,33 @@ export function compatibleEuler(q: Quaternion, prev: Euler | undefined): Euler {
   const dist = (e: Euler) => Math.abs(e.x - prev.x) + Math.abs(e.y - prev.y) + Math.abs(e.z - prev.z)
   for (const e of [a, b]) e.set(wrap(e.x, prev.x), wrap(e.y, prev.y), wrap(e.z, prev.z))
   return dist(a) <= dist(b) ? a : b
+}
+
+type HingeState = { axisLocal: Vector3; refQuat: Quaternion; bendRef: number }
+
+/** hinge 관절의 기준 대비 굽힘축 twist 각(부호, (-π, π]). 2·atan2(v·axis, w) 는 w<0(음의 이중 표현)이면 ±2π 어긋나므로 감는다 */
+function hingeTwist(joint: Bone, hs: HingeState): number {
+  _hgRel.copy(hs.refQuat).invert().multiply(joint.quaternion) // rel = 기준 대비 로컬 회전
+  _hgVec.set(_hgRel.x, _hgRel.y, _hgRel.z)
+  let theta = 2 * Math.atan2(_hgVec.dot(hs.axisLocal), _hgRel.w)
+  if (theta > Math.PI) theta -= 2 * Math.PI
+  else if (theta < -Math.PI) theta += 2 * Math.PI
+  return theta
+}
+
+/** 직립(φ=0)에서 -10° 까지 */
+function hingeMinTwist(hs: HingeState) {
+  return -(hs.bendRef + HINGE_HYPEREXTEND)
+}
+
+function hingeMaxTwist(hs: HingeState) {
+  return Math.max(0, HINGE_MAX_BEND - hs.bendRef)
+}
+
+/** 원 위 두 각의 거리 [0, π] */
+function angularDistance(a: number, b: number) {
+  const d = Math.abs(a - b) % (2 * Math.PI)
+  return d > Math.PI ? 2 * Math.PI - d : d
 }
 
 function toNameSet(names: string[]) {
