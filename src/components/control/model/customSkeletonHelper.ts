@@ -98,8 +98,24 @@ const _effQuat = new Quaternion() // 이펙터 캡처 — 솔브 중 _pinQuat �
 const _pinQuat = new Quaternion()
 const _pinScale = new Vector3()
 // hinge 제약 (무릎·팔꿈치, 종원 2026-09-10): IK 시 단일축 굽힘 + 역굽힘 한계
-const HINGE_HYPEREXTEND = (10 * Math.PI) / 180 // 역굽힘(과신전) 허용 10°
+const HINGE_HYPEREXTEND = (10 * Math.PI) / 180 // 역굽힘(과신전) 허용 10° — 팔꿈치
+// 무릎은 뒤로 안 꺾인다 (종원 2026-10-01 "무릎 IK 했을 때 뒤로 안 돌아가게") — 곧게 편 데까지만
+const KNEE_HYPEREXTEND = 0
+// 발 고정 중 무릎이 고를 수 있는 방향 — 드래그 시작 때 굽힘 방향에서 이 각도 안(허벅지 안·바깥 돌림). 넘으면 무릎이 뒤로 돌아간다
+const FOOT_LOCK_KNEE_SWING = (75 * Math.PI) / 180
 const HINGE_MAX_BEND = (175 * Math.PI) / 180 // 자연 굽힘 상한(완전 접힘 방지)
+const _flH = new Vector3()
+const _flK = new Vector3()
+const _flF = new Vector3()
+const _flU = new Vector3()
+const _flRef = new Vector3()
+const _flW = new Vector3()
+const _flAxis = new Vector3()
+const _flKT = new Vector3()
+const _flA = new Vector3()
+const _flB = new Vector3()
+const _flQ = new Quaternion()
+const _flBoneQ = new Quaternion()
 const _hgBoneIn = new Vector3()
 const _hgBoneOut = new Vector3()
 const _hgAxis = new Vector3()
@@ -227,9 +243,9 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
   private gizmoMode: SkeletonGizmoMode = 'move'
   private rotateGizmo?: RotateGizmo
   /** 회전 드래그 — 시작 포즈·선택 관절 인덱스·시작 로컬 회전·부모 월드 회전(자기 회전이라 드래그 동안 불변) */
-  private rotateDrag?: { base: Float64Array; index: number; local0: Quaternion; parentWorld: Quaternion }
+  private rotateDrag?: { base: Float64Array; index: number; local0: Quaternion; parentWorld: Quaternion; lastValid?: Quaternion }
   /** hips 이동 드래그 (종원 2026-09-15) — 시작 포즈·hips 부모(월드 목표 → 로컬 위치). IK 없이 hips 위치만 */
-  private hipsMoveDrag?: { base: Float64Array; parent: Object3D }
+  private hipsMoveDrag?: { base: Float64Array; parent: Object3D; lastValid?: Float64Array }
   /** 관절 구 표시 상태 — 기즈모는 관절이 보일 때만 (setJointsVisible) */
   private jointsVisible = true
   private hoverIndex: number | null = null
@@ -256,7 +272,9 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
    *  무릎·허벅지를 2-bone 으로 다시 풀고 발 방향을 되돌린다. 끌고 있는 다리(선택·IK 체인에 든 다리)는 제외 */
   private footBones: Bone[] = []
   private footLock = false
-  private footLockRef: { foot: Bone; chain: Bone[]; pos: Vector3; quat: Quaternion }[] = []
+  private footLockRef: { foot: Bone; knee: Bone; thigh: Bone; pos: Vector3; quat: Quaternion; bendDir: Vector3; reach: number; minReach: number }[] = []
+  /** 무릎 = 발의 body 부모 — hinge 과신전 0 (뒤로 안 꺾임) */
+  private kneeBones = new Set<Object3D>()
   /** 선택 잠금 관절 = hips 직결 body 자식(spine1·허벅지) — 호버·클릭·기즈모 전부
    *  차단, 릭 UI 는 회색 표시 (종원 2026-09-09 최종). hips 자체는 2026-09-15 부터 편집 가능 */
   private lockedJointSet = new Set<Object3D>()
@@ -321,6 +339,10 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
       if (filter.feet?.length) {
         const footSet = toNameSet(filter.feet)
         this.footBones = this.bones.filter((bone) => footSet.has(bone.name))
+        for (const foot of this.footBones) {
+          const knee = this.bodyParentOf(foot)
+          if (knee) this.kneeBones.add(knee)
+        }
       }
       this.lockedJointNames = Array.from(this.lockedJointSet).map((bone) => (bone as Bone).name)
       // 잠금셋·hips 확정 후 기본색(잠금 회색·hips 분홍)으로 재색칠 — applyBoneFilter 는 잠금셋 채워지기 전에
@@ -591,7 +613,8 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
       const bendRef = Math.acos(Math.min(1, Math.max(-1, _hgBoneIn.dot(_hgBoneOut))))
       bone.matrixWorld.decompose(_hgPJ, _hgWorldQ, _hgPP) // _hgWorldQ = J 월드 회전
       const axisLocal = _hgAxis.clone().applyQuaternion(_hgWorldQ.invert()) // 축을 관절 로컬로
-      this.hingeState.set(bone, { axisLocal, refQuat: bone.quaternion.clone(), bendRef })
+      const hyperExtend = this.kneeBones.has(bone) ? KNEE_HYPEREXTEND : HINGE_HYPEREXTEND
+      this.hingeState.set(bone, { axisLocal, refQuat: bone.quaternion.clone(), bendRef, hyperExtend })
     }
   }
 
@@ -839,9 +862,26 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
     const pose = drag.base.slice()
     _rotLocal.toArray(pose, drag.index * 4)
     this.applyPose(pose)
+    // 발 고정 중 다리가 더 못 따라오는 회전이면 닿는 데까지만 — 마지막으로 닿던 회전과 목표 사이를 반씩 좁힌다 (종원 2026-10-01)
+    if (this.footLockRef.length > 0 && !this.footLockReachable()) {
+      const from = drag.lastValid ?? drag.local0
+      const target = _rotLocal.clone()
+      let lo = 0
+      let hi = 1
+      for (let i = 0; i < 14; i++) {
+        const mid = (lo + hi) / 2
+        _rotLocal.slerpQuaternions(from, target, mid).toArray(pose, drag.index * 4)
+        this.applyPose(pose)
+        if (this.footLockReachable()) lo = mid
+        else hi = mid
+      }
+      _rotLocal.slerpQuaternions(from, target, lo).toArray(pose, drag.index * 4)
+      this.applyPose(pose)
+    }
+    drag.lastValid = _rotLocal.clone()
     // 발 고정 — 돌린 관절이 든 다리는 제외(그 다리를 직접 돌리는 중)
     if (this.footLockRef.length > 0 && this.highlightBone) {
-      this.applyFootLock(new Set<Object3D>([this.highlightBone]))
+      this.applyFootLock(this.highlightBone)
       this.ikFrozenPose = this.capturePose() ?? pose
     } else this.ikFrozenPose = pose
   }
@@ -864,11 +904,30 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
     if (!drag || !this.jointBones || !this.moveGizmo?.dragTo(raycaster.ray, _moveTarget)) return
     if (!this.ikOriginPose) this.ikOriginPose = drag.base.slice()
     const pose = drag.base.slice()
-    drag.parent.worldToLocal(_moveTarget).toArray(pose, this.jointBones.length * 4)
+    const at = this.jointBones.length * 4
+    drag.parent.worldToLocal(_moveTarget).toArray(pose, at)
     this.applyPose(pose)
+    // 발 고정 중 다리가 더 못 따라오는 자리면 닿는 데까지만 — 마지막으로 닿던 자리와 목표 사이를 반씩 좁혀 경계를 찾는다.
+    // 기즈모는 hips 를 따라 그려지므로 경계에서 멈춘다 (종원 2026-10-01)
+    if (this.footLockRef.length > 0 && !this.footLockReachable()) {
+      const from = drag.lastValid ?? drag.base.slice(at, at + 3)
+      const to = pose.slice(at, at + 3)
+      let lo = 0
+      let hi = 1
+      for (let i = 0; i < 14; i++) {
+        const mid = (lo + hi) / 2
+        for (let c = 0; c < 3; c++) pose[at + c] = from[c] + (to[c] - from[c]) * mid
+        this.applyPose(pose)
+        if (this.footLockReachable()) lo = mid
+        else hi = mid
+      }
+      for (let c = 0; c < 3; c++) pose[at + c] = from[c] + (to[c] - from[c]) * lo
+      this.applyPose(pose)
+    }
+    drag.lastValid = pose.slice(at, at + 3)
     // 발 고정 — hips 를 내리면 무릎이 굽고 발은 제자리 (종원 2026-10-01)
     if (this.footLockRef.length > 0) {
-      this.applyFootLock(new Set<Object3D>())
+      this.applyFootLock(this.hipsBone)
       this.ikFrozenPose = this.capturePose() ?? pose
     } else this.ikFrozenPose = pose
   }
@@ -1167,7 +1226,7 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
       if (pin.chain.length > 0) this.solveChain(pin.chain, pin.effector, pin.pos)
       this.restoreWorldQuaternion(pin.effector, pin.quat)
     }
-    if (this.footLockRef.length > 0) this.applyFootLock(new Set<Object3D>([this.highlightBone, ...this.ikChain]))
+    if (this.footLockRef.length > 0) this.applyFootLock(this.highlightBone)
   }
 
   /** 발 고정 켜기/끄기 (종원 2026-10-01) — 다음 드래그부터 적용(진행 중 드래그는 그대로) */
@@ -1184,8 +1243,7 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
     return null
   }
 
-  /** 드래그 시작 — 발 고정이 켜져 있으면 양발 월드 위치·방향을 잡아 둔다. 보정 체인 = [무릎, 허벅지](이펙터에서 가까운 순).
-   *  hinge 굽힘축을 지금 포즈로 다시 잡아 무릎이 옆으로 꺾이지 않게 한다(2-bone 해석) */
+  /** 드래그 시작 — 발 고정이 켜져 있으면 양발 월드 위치·방향과 무릎 굽힘 방향(허벅지→발 선에서 무릎 쪽)을 잡아 둔다 */
   private captureFootLock() {
     this.footLockRef = []
     if (!this.footLock) return
@@ -1197,19 +1255,87 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
       const pos = new Vector3()
       const quat = new Quaternion()
       foot.matrixWorld.decompose(pos, quat, _pinScale)
-      this.footLockRef.push({ foot, chain: [knee, thigh], pos, quat })
+      const h = new Vector3().setFromMatrixPosition(thigh.matrixWorld)
+      const k = new Vector3().setFromMatrixPosition(knee.matrixWorld)
+      const u = pos.clone().sub(h).normalize()
+      const bendDir = k.sub(h).addScaledVector(u, -k.clone().sub(h).dot(u))
+      if (bendDir.lengthSq() < 1e-10) bendDir.set(0, 0, 1).addScaledVector(u, -u.z) // 곧게 편 다리 — 정면 쪽으로 가정
+      // 허벅지→발이 닿을 수 있는 거리 — 곧게 편 길이(조금 덜) ~ 무릎 최대 굽힘(HINGE_MAX_BEND) 길이
+      const l1 = h.distanceTo(new Vector3().setFromMatrixPosition(knee.matrixWorld))
+      const l2 = new Vector3().setFromMatrixPosition(knee.matrixWorld).distanceTo(pos)
+      // 시작 자세 거리는 늘 허용 — 서 있는 다리는 거의 곧아서(편 길이에 가까움) 안 그러면 시작부터 '못 닿음'으로 기즈모가 안 움직였다
+      const d0 = h.distanceTo(pos)
+      const reach = Math.max(l1 + l2, d0)
+      const minReach = Math.min(Math.sqrt(Math.max(0, l1 * l1 + l2 * l2 - 2 * l1 * l2 * Math.cos(Math.PI - HINGE_MAX_BEND))), d0)
+      this.footLockRef.push({ foot, knee, thigh, pos, quat, bendDir: bendDir.normalize(), reach, minReach })
     }
-    if (this.footLockRef.length > 0) this.captureHingeState()
   }
 
-  /** 잡아 둔 발 자리로 무릎·허벅지를 다시 풀고 발 방향을 되돌린다. exclude 에 든 관절이 그 다리에 있으면(끌고 있는 다리) 건너뛴다.
-   *  발이 닿지 않는 거리(hips 를 너무 높이 올림)면 다리를 끝까지 편 자리까지만 — 발이 들린다 */
-  private applyFootLock(exclude: Set<Object3D>) {
+  /** 발 고정 해석 (종원 2026-10-01 "hips 나 leg 본을 움직여도 foot·toe 월드 위치·회전이 돌아가면 안 된다").
+   *  허벅지 시작 H 와 고정 발 F 사이 거리로 무릎이 놓일 수 있는 원(축 H→F, 중심 C, 반지름 r)이 정해진다 — 지금 무릎 자리(사용자가
+   *  hips·무릎·허벅지를 움직인 결과)에 가장 가까운 원 위 점을 고르되 시작 굽힘 방향에서 FOOT_LOCK_KNEE_SWING 안으로(뒤로 안 돌아감).
+   *  허벅지·정강이를 그 무릎·발 자리로 돌리고(최소 회전) 발 월드 방향을 되돌린다 — 발가락은 발에 붙어 같이 고정된다.
+   *  닿지 않는 거리면 다리를 곧게 편 채 발 쪽을 향한다. moving = 지금 끄는 관절 — 그 발(또는 발가락)을 직접 끄는 다리만 건너뛴다 */
+  private applyFootLock(moving?: Bone) {
     for (const lock of this.footLockRef) {
-      if (exclude.has(lock.foot) || lock.chain.some((bone) => exclude.has(bone))) continue
-      this.solveChain(lock.chain, lock.foot, lock.pos)
-      this.restoreWorldQuaternion(lock.foot, lock.quat)
+      if (moving && (moving === lock.foot || moving.parent === lock.foot)) continue
+      const { foot, knee, thigh } = lock
+      thigh.updateWorldMatrix(true, true)
+      const h = _flH.setFromMatrixPosition(thigh.matrixWorld)
+      const kCur = _flK.setFromMatrixPosition(knee.matrixWorld)
+      const fCur = _flF.setFromMatrixPosition(foot.matrixWorld)
+      const l1 = h.distanceTo(kCur)
+      const l2 = kCur.distanceTo(fCur)
+      const toF = _flU.subVectors(lock.pos, h)
+      const d = Math.min(Math.max(toF.length(), Math.abs(l1 - l2) + 1e-6), l1 + l2 - 1e-6)
+      if (toF.lengthSq() < 1e-12) continue
+      const u = toF.normalize()
+      const a = (l1 * l1 - l2 * l2 + d * d) / (2 * d)
+      const r = Math.sqrt(Math.max(0, l1 * l1 - a * a))
+      // 무릎 방향 — 지금 무릎 자리를 원 평면에 투영, 시작 굽힘 방향(원 평면 투영)에서 각도 제한
+      const ref = _flRef.copy(lock.bendDir).addScaledVector(u, -lock.bendDir.dot(u))
+      if (ref.lengthSq() < 1e-10) ref.set(0, 0, 1).addScaledVector(u, -u.z)
+      ref.normalize()
+      const want = _flW.subVectors(kCur, h).addScaledVector(u, -kCur.clone().sub(h).dot(u))
+      if (want.lengthSq() < 1e-10) want.copy(ref)
+      want.normalize()
+      const ang = Math.acos(Math.min(1, Math.max(-1, ref.dot(want))))
+      if (ang > FOOT_LOCK_KNEE_SWING) {
+        const axis = _flAxis.crossVectors(ref, want)
+        if (axis.lengthSq() < 1e-10) axis.copy(u)
+        want.copy(ref).applyAxisAngle(axis.normalize(), FOOT_LOCK_KNEE_SWING)
+      }
+      const kTarget = _flKT.copy(h).addScaledVector(u, a).addScaledVector(want, r)
+      // 허벅지: (지금 무릎 - H) → (목표 무릎 - H) 최소 회전을 월드에서
+      this.rotateBoneWorld(thigh, _flA.subVectors(kCur, h).normalize(), _flB.subVectors(kTarget, h).normalize())
+      // 정강이(무릎): (지금 발 - 무릎) → (고정 발 - 무릎)
+      knee.updateWorldMatrix(false, true)
+      const k2 = _flK.setFromMatrixPosition(knee.matrixWorld)
+      const f2 = _flF.setFromMatrixPosition(foot.matrixWorld)
+      this.rotateBoneWorld(knee, _flA.subVectors(f2, k2).normalize(), _flB.subVectors(lock.pos, k2).normalize())
+      this.restoreWorldQuaternion(foot, lock.quat)
     }
+  }
+
+  /** 지금 포즈에서 고정한 양발에 다리가 닿는가 — 허벅지 시작 ~ 고정 발 거리가 [최대 굽힘 길이, 편 길이] 안 (종원 2026-10-01 "더 못 가면 기즈모도 안 가게") */
+  private footLockReachable(): boolean {
+    for (const lock of this.footLockRef) {
+      lock.thigh.updateWorldMatrix(true, false)
+      const d = _flH.setFromMatrixPosition(lock.thigh.matrixWorld).distanceTo(lock.pos)
+      if (d > lock.reach || d < lock.minReach) return false
+    }
+    return true
+  }
+
+  /** 관절을 월드에서 from → to 방향으로 최소 회전 (관절 자리에서) — 자식은 따라간다 */
+  private rotateBoneWorld(bone: Bone, from: Vector3, to: Vector3) {
+    if (!bone.parent || from.lengthSq() < 1e-12 || to.lengthSq() < 1e-12) return
+    _flQ.setFromUnitVectors(from, to)
+    bone.getWorldQuaternion(_flBoneQ)
+    _flBoneQ.premultiply(_flQ)
+    bone.parent.matrixWorld.decompose(_pinPos, _pinQuat, _pinScale)
+    bone.quaternion.copy(_pinQuat.invert()).multiply(_flBoneQ).normalize()
+    bone.updateMatrixWorld(true)
   }
 
   /** 관절의 월드 방향을 캡처값으로 되돌린다 — 로컬 회전 = 부모 월드 회전⁻¹ × 캡처 월드 회전.
@@ -1403,7 +1529,7 @@ export function compatibleEuler(q: Quaternion, prev: Euler | undefined): Euler {
   return dist(a) <= dist(b) ? a : b
 }
 
-type HingeState = { axisLocal: Vector3; refQuat: Quaternion; bendRef: number }
+type HingeState = { axisLocal: Vector3; refQuat: Quaternion; bendRef: number; hyperExtend: number }
 
 /** hinge 관절의 기준 대비 굽힘축 twist 각(부호, (-π, π]). 2·atan2(v·axis, w) 는 w<0(음의 이중 표현)이면 ±2π 어긋나므로 감는다 */
 function hingeTwist(joint: Bone, hs: HingeState): number {
@@ -1417,7 +1543,7 @@ function hingeTwist(joint: Bone, hs: HingeState): number {
 
 /** 직립(φ=0)에서 -10° 까지 */
 function hingeMinTwist(hs: HingeState) {
-  return -(hs.bendRef + HINGE_HYPEREXTEND)
+  return -(hs.bendRef + hs.hyperExtend)
 }
 
 function hingeMaxTwist(hs: HingeState) {
