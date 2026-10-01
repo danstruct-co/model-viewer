@@ -123,7 +123,10 @@ export default class AnimationControl {
       return
     }
 
-    if (this.currentTime > this.max) {
+    // 구간 밖이면 시작으로 — 끝을 넘을 때만 보면 구간 앞(min 미만)에서 재생할 때 구간을 지나쳐 계속 재생되고,
+    // 구간 끝이 클립 끝에 붙으면 액션 자체 루프(LoopRepeat)가 0 으로 감아 max 초과가 안 잡힌다 (스튜디오 구간 루프, 종원 2026-10-01).
+    // range 미지정이면 min = 0 이라 기존 동작 그대로
+    if (this.currentTime > this.max || this.currentTime < this.min) {
       this.setTime(this.min)
       this.play()
       this.onLoop?.()
