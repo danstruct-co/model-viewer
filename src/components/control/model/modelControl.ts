@@ -30,6 +30,7 @@ export default class ModelControl {
   private skeletonHelper?: CustomSkeletonHelper
   /** 지정 IK 루트 본명 (종원 2026-09-09) — 헬퍼 토글 재생성에도 유지 */
   private skeletonIKRootName: string | null = null
+  private skeletonFootLock = false
   /** 관절 피킹(호버/클릭/기즈모 드래그) 허용 — 스튜디오 모션 편집 모드 게이트 (종원 2026-09-09).
    *  기본 true: onJointPick 을 넘기는 소비자(스튜디오)가 모드에 맞춰 직접 토글한다 */
   skeletonPickEnabled = true
@@ -260,6 +261,7 @@ export default class ModelControl {
     // 토글 재생성에도 선택 하이라이트 유지 (종원 2026-09-08 릭 선택 연동)
     if (this.skeletonHighlightName) this.skeletonHelper.setHighlightBone(this.skeletonHighlightName)
     if (this.skeletonIKRootName) this.skeletonHelper.setIKRoot(this.skeletonIKRootName)
+    this.skeletonHelper.setFootLock(this.skeletonFootLock)
     // 관절 구는 모션 편집(피킹) 모드에서만 — 패널 스켈레톤 토글만 켠 상태는 본만 (종원 2026-09-10)
     this.skeletonHelper.setJointsVisible(this.skeletonPickEnabled)
   }
@@ -277,6 +279,12 @@ export default class ModelControl {
   setSkeletonIKRoot(name: string | null) {
     this.skeletonIKRootName = name
     this.skeletonHelper?.setIKRoot(name)
+  }
+
+  /** 발 고정 (종원 2026-10-01) — 켜면 IK·회전·hips 이동 드래그 동안 발(필터 feet)의 월드 위치·방향 유지. 헬퍼를 다시 만들어도 이어진다 */
+  setSkeletonFootLock(on: boolean) {
+    this.skeletonFootLock = on
+    this.skeletonHelper?.setFootLock(on)
   }
 
   /** 현재 선택 본의 IK 루트 후보(직계 부모 → hips 직전, 원 본명) — 조상 선택 UI 용 */

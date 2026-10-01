@@ -183,6 +183,8 @@ export type SkeletonBoneFilter = {
   hingeJoints?: string[]
   /** 머리 본명 (2026-09-30) — 다른 관절 IK 로 척추가 돌아도 머리는 **월드 방향 유지**(시선 보존). 미지정이면 머리가 척추를 따라 돈다 */
   head?: string
+  /** 발(발목) 본명 — 발 고정(setFootLock) 대상 (종원 2026-10-01) */
+  feet?: string[]
 }
 
 /**
@@ -250,6 +252,11 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
    *  (발끝/손/머리)의 월드 위치·방향만 솔브마다 IK 로 원복. chain = 이펙터에서 가까운 순
    *  회전 관절(무릎 등이 자연 흡수), pos/quat = 프레임 캡처 버퍼 (종원 2026-09-09) */
   private ikPinned: { chain: Bone[]; effector: Bone; pos: Vector3; quat: Quaternion }[] = []
+  /** 발 고정 (종원 2026-10-01) — 켜면 IK·회전·hips 이동 드래그 동안 발(발목)의 월드 위치·방향을 드래그 시작 값으로 유지한다.
+   *  무릎·허벅지를 2-bone 으로 다시 풀고 발 방향을 되돌린다. 끌고 있는 다리(선택·IK 체인에 든 다리)는 제외 */
+  private footBones: Bone[] = []
+  private footLock = false
+  private footLockRef: { foot: Bone; chain: Bone[]; pos: Vector3; quat: Quaternion }[] = []
   /** 선택 잠금 관절 = hips 직결 body 자식(spine1·허벅지) — 호버·클릭·기즈모 전부
    *  차단, 릭 UI 는 회색 표시 (종원 2026-09-09 최종). hips 자체는 2026-09-15 부터 편집 가능 */
   private lockedJointSet = new Set<Object3D>()
@@ -310,6 +317,10 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
       if (filter.head) {
         const headSet = toNameSet([filter.head])
         this.headBone = this.bones.find((bone) => headSet.has(bone.name))
+      }
+      if (filter.feet?.length) {
+        const footSet = toNameSet(filter.feet)
+        this.footBones = this.bones.filter((bone) => footSet.has(bone.name))
       }
       this.lockedJointNames = Array.from(this.lockedJointSet).map((bone) => (bone as Bone).name)
       // 잠금셋·hips 확정 후 기본색(잠금 회색·hips 분홍)으로 재색칠 — applyBoneFilter 는 잠금셋 채워지기 전에
@@ -802,6 +813,7 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
     const base = this.capturePose()
     if (index < 0 || !base) return false
     this.releaseTargetKeepPose()
+    this.captureFootLock()
     this.rotateDrag = {
       base,
       index,
@@ -826,8 +838,12 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
     _rotLocal.normalize()
     const pose = drag.base.slice()
     _rotLocal.toArray(pose, drag.index * 4)
-    this.ikFrozenPose = pose
     this.applyPose(pose)
+    // 발 고정 — 돌린 관절이 든 다리는 제외(그 다리를 직접 돌리는 중)
+    if (this.footLockRef.length > 0 && this.highlightBone) {
+      this.applyFootLock(new Set<Object3D>([this.highlightBone]))
+      this.ikFrozenPose = this.capturePose() ?? pose
+    } else this.ikFrozenPose = pose
   }
 
   /** hips 이동 드래그 시작 (종원 2026-09-15) — IK 없이 hips 위치만. 지금 포즈(다른 관절 편집 포함)가 기준 */
@@ -836,6 +852,7 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
     const base = this.capturePose()
     if (!parent || !base || !this.moveGizmo?.beginDrag(handle, raycaster.camera, raycaster.ray, viewport)) return false
     this.releaseTargetKeepPose()
+    this.captureFootLock()
     this.hipsMoveDrag = { base, parent }
     return true
   }
@@ -848,8 +865,12 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
     if (!this.ikOriginPose) this.ikOriginPose = drag.base.slice()
     const pose = drag.base.slice()
     drag.parent.worldToLocal(_moveTarget).toArray(pose, this.jointBones.length * 4)
-    this.ikFrozenPose = pose
     this.applyPose(pose)
+    // 발 고정 — hips 를 내리면 무릎이 굽고 발은 제자리 (종원 2026-10-01)
+    if (this.footLockRef.length > 0) {
+      this.applyFootLock(new Set<Object3D>())
+      this.ikFrozenPose = this.capturePose() ?? pose
+    } else this.ikFrozenPose = pose
   }
 
   // ---- 루트 편집 (종원 2026-09-15) ----
@@ -1070,7 +1091,10 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
     if (this.highlightBone) this.clampTargetToReach(this.highlightBone, this.targetWorld)
     this.ikFrozenPose = undefined // 타겟이 움직임 = 다시 푼다
     // IK 시작 순간(드래그 시작)의 포즈로 hinge 굽힘축·기준각 캡처 (종원 2026-09-10)
-    if (starting) this.captureHingeState()
+    if (starting) {
+      this.captureHingeState()
+      this.captureFootLock() // 솔브 기준(드래그 시작 포즈)의 발 자리
+    }
   }
 
   /** IK 타겟·편집 세션 해제 — 프레임 이동·적용·재생·편집 종료 시. 원 포즈로 즉시 되돌린다(일시정지 중엔 믹서가 다시 안 써서,
@@ -1142,6 +1166,49 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
     for (const pin of this.ikPinned) {
       if (pin.chain.length > 0) this.solveChain(pin.chain, pin.effector, pin.pos)
       this.restoreWorldQuaternion(pin.effector, pin.quat)
+    }
+    if (this.footLockRef.length > 0) this.applyFootLock(new Set<Object3D>([this.highlightBone, ...this.ikChain]))
+  }
+
+  /** 발 고정 켜기/끄기 (종원 2026-10-01) — 다음 드래그부터 적용(진행 중 드래그는 그대로) */
+  setFootLock(on: boolean) {
+    this.footLock = on
+  }
+
+  /** body 관절의 가장 가까운 body 조상 (손가락 제외) */
+  private bodyParentOf(bone: Bone): Bone | null {
+    if (!this.filteredPairs || !this.pairIsFinger) return null
+    for (let i = 0; i < this.filteredPairs.length; i++) {
+      if (!this.pairIsFinger[i] && this.filteredPairs[i][0] === bone) return this.filteredPairs[i][1] as Bone
+    }
+    return null
+  }
+
+  /** 드래그 시작 — 발 고정이 켜져 있으면 양발 월드 위치·방향을 잡아 둔다. 보정 체인 = [무릎, 허벅지](이펙터에서 가까운 순).
+   *  hinge 굽힘축을 지금 포즈로 다시 잡아 무릎이 옆으로 꺾이지 않게 한다(2-bone 해석) */
+  private captureFootLock() {
+    this.footLockRef = []
+    if (!this.footLock) return
+    for (const foot of this.footBones) {
+      const knee = this.bodyParentOf(foot)
+      const thigh = knee ? this.bodyParentOf(knee) : null
+      if (!knee || !thigh || thigh === this.hipsBone) continue
+      foot.updateWorldMatrix(true, false)
+      const pos = new Vector3()
+      const quat = new Quaternion()
+      foot.matrixWorld.decompose(pos, quat, _pinScale)
+      this.footLockRef.push({ foot, chain: [knee, thigh], pos, quat })
+    }
+    if (this.footLockRef.length > 0) this.captureHingeState()
+  }
+
+  /** 잡아 둔 발 자리로 무릎·허벅지를 다시 풀고 발 방향을 되돌린다. exclude 에 든 관절이 그 다리에 있으면(끌고 있는 다리) 건너뛴다.
+   *  발이 닿지 않는 거리(hips 를 너무 높이 올림)면 다리를 끝까지 편 자리까지만 — 발이 들린다 */
+  private applyFootLock(exclude: Set<Object3D>) {
+    for (const lock of this.footLockRef) {
+      if (exclude.has(lock.foot) || lock.chain.some((bone) => exclude.has(bone))) continue
+      this.solveChain(lock.chain, lock.foot, lock.pos)
+      this.restoreWorldQuaternion(lock.foot, lock.quat)
     }
   }
 
