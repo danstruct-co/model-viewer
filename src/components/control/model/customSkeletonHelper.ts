@@ -1234,6 +1234,15 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
     this.footLock = on
   }
 
+  /** body 관절의 첫 body 자식 (손가락 제외) — 발 → 발가락 */
+  private bodyChildOf(bone: Bone): Bone | null {
+    if (!this.filteredPairs || !this.pairIsFinger) return null
+    for (let i = 0; i < this.filteredPairs.length; i++) {
+      if (!this.pairIsFinger[i] && this.filteredPairs[i][1] === bone) return this.filteredPairs[i][0] as Bone
+    }
+    return null
+  }
+
   /** body 관절의 가장 가까운 body 조상 (손가락 제외) */
   private bodyParentOf(bone: Bone): Bone | null {
     if (!this.filteredPairs || !this.pairIsFinger) return null
@@ -1258,8 +1267,18 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
       const h = new Vector3().setFromMatrixPosition(thigh.matrixWorld)
       const k = new Vector3().setFromMatrixPosition(knee.matrixWorld)
       const u = pos.clone().sub(h).normalize()
-      const bendDir = k.sub(h).addScaledVector(u, -k.clone().sub(h).dot(u))
-      if (bendDir.lengthSq() < 1e-10) bendDir.set(0, 0, 1).addScaledVector(u, -u.z) // 곧게 편 다리 — 정면 쪽으로 가정
+      const legLen = h.distanceTo(k) + k.distanceTo(pos)
+      const bendDir = k.clone().sub(h)
+      bendDir.addScaledVector(u, -bendDir.dot(u))
+      // 거의 곧은 다리면 무릎이 허벅지→발 선에서 거의 안 떨어져 그 방향은 흔들린다(무릎이 옆·뒤로 튐, 종원 2026-10-01) —
+      // 무릎은 발가락이 향한 쪽으로 굽으니 발→발가락 방향을 쓴다. 발가락이 없으면 정면(+Z)
+      if (bendDir.length() < legLen * 0.03) {
+        const toe = this.bodyChildOf(foot)
+        if (toe) bendDir.setFromMatrixPosition(toe.matrixWorld).sub(pos)
+        else bendDir.set(0, 0, 1)
+        bendDir.addScaledVector(u, -bendDir.dot(u))
+        if (bendDir.lengthSq() < 1e-10) bendDir.set(0, 0, 1).addScaledVector(u, -u.z)
+      }
       // 허벅지→발이 닿을 수 있는 거리 — 곧게 편 길이(조금 덜) ~ 무릎 최대 굽힘(HINGE_MAX_BEND) 길이
       const l1 = h.distanceTo(new Vector3().setFromMatrixPosition(knee.matrixWorld))
       const l2 = new Vector3().setFromMatrixPosition(knee.matrixWorld).distanceTo(pos)
@@ -1296,7 +1315,10 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
       const ref = _flRef.copy(lock.bendDir).addScaledVector(u, -lock.bendDir.dot(u))
       if (ref.lengthSq() < 1e-10) ref.set(0, 0, 1).addScaledVector(u, -u.z)
       ref.normalize()
-      const want = _flW.subVectors(kCur, h).addScaledVector(u, -kCur.clone().sub(h).dot(u))
+      // 무릎 방향: 이 다리의 허벅지·무릎을 직접 끄는 중이면 지금 무릎 자리를 따라가고, 아니면(hips 이동·회전 등) 시작 때 잡은
+      // 굽힘 방향 그대로 — 매 프레임 지금 무릎을 투영하면 hips 가 앞뒤로 움직일 때 투영이 뒤집혀 무릎이 튀었다 (종원 2026-10-01)
+      const followKnee = moving === thigh || moving === knee
+      const want = followKnee ? _flW.subVectors(kCur, h).addScaledVector(u, -kCur.clone().sub(h).dot(u)) : _flW.copy(ref)
       if (want.lengthSq() < 1e-10) want.copy(ref)
       want.normalize()
       const ang = Math.acos(Math.min(1, Math.max(-1, ref.dot(want))))
