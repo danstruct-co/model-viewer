@@ -15,7 +15,6 @@ import {
 } from 'three'
 import ScreenGizmo, {
   AXIS_COLORS,
-  AXIS_DIRS,
   AXIS_HANDLES,
   HOT_WHITE_MIX,
   LINE_HOT_PX,
@@ -30,8 +29,9 @@ import ScreenGizmo, {
 } from './screenGizmo'
 
 /**
- * 관절 이동 기즈모 (종원 2026-09-15 — 회전 기즈모와 같은 크기 계산·잡기·강조로 개편): 월드 X/Y/Z 화살표 + 가운데 흰 원.
- * 화살표 = 그 월드 축 직선 위에서 포인터 광선과 가장 가까운 점으로 IK 타겟 이동, 흰 원 = 관절을 지나고 시선(관절→카메라)에
+ * 관절 이동 기즈모 (종원 2026-09-15 — 회전 기즈모와 같은 크기 계산·잡기·강조로 개편): X/Y/Z 화살표 + 가운데 흰 원.
+ * 축 = 월드 축 또는 선택 관절 로컬 축(좌표계, 종원 2026-10-01 — 기즈모 방향을 헬퍼가 잡고 여기선 frame() 의 axes 를 쓴다).
+ * 화살표 = 그 축 직선 위에서 포인터 광선과 가장 가까운 점으로 IK 타겟 이동, 흰 원 = 관절을 지나고 시선(관절→카메라)에
  * 수직인 면 위에서 포인터를 그대로 따라감(회전 기즈모 흰 링과 같은 시선축). 시선과 거의 평행한 화살표는 화면에서 점처럼
  * 짧아져 잡기 어려워 옅게 숨긴다. 이전 월드 크기 단색 실린더 축 기즈모(2026-09-08)를 대체
  */
@@ -171,7 +171,7 @@ export default class MoveGizmo extends ScreenGizmo {
     let best: GizmoHandle | null = null
     let bestDist = PICK_PX
     for (let i = 0; i < AXIS_HANDLES.length; i++) {
-      const dir = AXIS_DIRS[i]
+      const dir = this.axes[i]
       if (Math.abs(dir.dot(this.toCam)) >= FACING_PICK_MAX) continue
       toPx(_p.copy(dir).multiplyScalar(radius * SHAFT_START).add(this.center), camera, viewport, _a)
       toPx(_p.copy(dir).multiplyScalar(radius).add(this.center), camera, viewport, _b)
@@ -194,7 +194,7 @@ export default class MoveGizmo extends ScreenGizmo {
       if (!hit0) return false
       this.drag = { origin, plane, hit0 }
     } else if (handle === 'x' || handle === 'y' || handle === 'z') {
-      const axis = AXIS_DIRS[AXIS_HANDLES.indexOf(handle)]
+      const axis = this.axes[AXIS_HANDLES.indexOf(handle)].clone() // 드래그 동안 고정 — axes 는 frame() 마다 바뀐다
       this.drag = { origin, axis, startT: closestT(ray, origin, axis) }
     } else {
       return false

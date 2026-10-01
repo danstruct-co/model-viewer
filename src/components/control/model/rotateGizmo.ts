@@ -12,7 +12,6 @@ import {
 } from 'three'
 import ScreenGizmo, {
   AXIS_COLORS,
-  AXIS_DIRS,
   AXIS_HANDLES,
   HOT_WHITE_MIX,
   LINE_HOT_PX,
@@ -27,7 +26,8 @@ import ScreenGizmo, {
 } from './screenGizmo'
 
 /**
- * 관절 회전 기즈모 (종원 2026-09-14) — 블렌더 회전 기즈모 형태: 월드 X/Y/Z 축 링(카메라 쪽 반원만 보여 구 윤곽이 됨)
+ * 관절 회전 기즈모 (종원 2026-09-14) — 블렌더 회전 기즈모 형태: X/Y/Z 축 링(카메라 쪽 반원만 보여 구 윤곽이 됨,
+ * 축 = 월드 축 또는 선택 관절 로컬 축 — 좌표계, 종원 2026-10-01)
  * + 바깥 흰 화면 링(시선축 = 관절→카메라 방향 회전) + 구 안쪽 트랙볼(자유 회전, 호버 시 옅게 표시).
  * 링 = 화면에서 기즈모 중심을 도는 각도만큼 회전(축이 카메라 반대쪽을 향하면 부호 반전), 트랙볼 = 시작점 대비 끈 거리·방향.
  * 크기(화면 px 고정)·잡기·강조 규칙은 ScreenGizmo 공통 (종원 2026-09-15)
@@ -47,6 +47,8 @@ const MIN_ANGLE_PX = 3 // 포인터가 중심에 너무 가까우면 각도가 �
 const TRACKBALL_RAD_PER_PX = 0.01 // 트랙볼 감도 — 1px ≈ 0.57°
 
 const _p = new Vector3()
+const _u = new Vector3()
+const _v = new Vector3()
 const _a = new Vector2()
 const _b = new Vector2()
 const _cPx = new Vector2()
@@ -149,7 +151,9 @@ export default class RotateGizmo extends ScreenGizmo {
     let best: GizmoHandle | null = null
     let bestDist = PICK_PX
     for (let i = 0; i < AXIS_HANDLES.length; i++) {
-      const [u, v] = AXIS_BASIS[i]
+      // 링 평면 기저를 기즈모 방향으로 — 로컬 좌표계면 관절 축 링
+      const u = _u.copy(AXIS_BASIS[i][0]).applyQuaternion(this.orient)
+      const v = _v.copy(AXIS_BASIS[i][1]).applyQuaternion(this.orient)
       let prevFront = false
       for (let s = 0; s <= RING_SAMPLES; s++) {
         const t = (s / RING_SAMPLES) * Math.PI * 2
@@ -181,7 +185,7 @@ export default class RotateGizmo extends ScreenGizmo {
         ? this.toCam.clone()
         : handle === 'trackball'
           ? new Vector3()
-          : AXIS_DIRS[AXIS_HANDLES.indexOf(handle)].clone()
+          : this.axes[AXIS_HANDLES.indexOf(handle)].clone()
     const center = toPx(this.center, camera, viewport, new Vector2())
     this.drag = {
       handle,

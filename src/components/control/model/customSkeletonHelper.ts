@@ -169,6 +169,8 @@ function createOctahedralBoneGeometry() {
 
 /** 관절 편집 기즈모 모드 (종원 2026-09-14) — move = 월드 축 드래그 IK(hips 는 IK 없이 위치만, 2026-09-15) / rotate = 선택 관절 자체를 월드 기준 구 기즈모로 회전 */
 export type SkeletonGizmoMode = 'move' | 'rotate'
+/** 기즈모 좌표계 (종원 2026-10-01) — world = 월드 축(기본) / local = 선택 관절의 로컬 축. 위치 편집(루트)은 늘 월드 */
+export type SkeletonGizmoSpace = 'world' | 'local'
 
 /** 위치 편집 대상 (종원 2026-09-15) — origin = 리그 루트 노드(원점 — 이동 경로까지 같이) / character = hips(모든 프레임에 더하는 로컬 값) */
 export type SkeletonPositionTarget = 'origin' | 'character'
@@ -241,6 +243,7 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
   private rootDrag?: { local0: Quaternion; parentWorld: Quaternion }
   /** 기즈모 모드 (종원 2026-09-14) — rotate 는 IK 를 안 써 주황 체인이 없다. 두 모드의 드래그는 같은 편집 포즈(ikFrozenPose)에 누적 */
   private gizmoMode: SkeletonGizmoMode = 'move'
+  private gizmoSpace: SkeletonGizmoSpace = 'world'
   private rotateGizmo?: RotateGizmo
   /** 회전 드래그 — 시작 포즈·선택 관절 인덱스·시작 로컬 회전·부모 월드 회전(자기 회전이라 드래그 동안 불변) */
   private rotateDrag?: { base: Float64Array; index: number; local0: Quaternion; parentWorld: Quaternion; lastValid?: Quaternion }
@@ -768,6 +771,11 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
     this.gizmoMode = mode
     this.syncGizmoVisibility()
     this.refreshIKChain()
+  }
+
+  /** 기즈모 좌표계 전환 — 축 방향만 바뀌고 드래그 계산(월드 목표·월드 회전)은 그대로 */
+  setGizmoSpace(space: SkeletonGizmoSpace) {
+    this.gizmoSpace = space
   }
 
   private activeGizmo() {
@@ -1481,7 +1489,7 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
       this.hipsMarker.scale.setScalar(ROOT_MARKER_SIZE / (Math.abs(_scale.x) || 1))
     }
 
-    // 선택 관절(위치 편집 중엔 대상 노드) 기즈모 배치 — 월드 정렬·그 위치. 크기는 화면 px 고정이라 그릴 때 기즈모가 잡는다 (종원 2026-09-15)
+    // 선택 관절(위치 편집 중엔 대상 노드) 기즈모 배치 — 월드 정렬(로컬 좌표계면 관절 축)·그 위치. 크기는 화면 px 고정이라 그릴 때 기즈모가 잡는다 (종원 2026-09-15)
     const gizmo = this.activeGizmo()
     const anchor = this.rootEditing ? this.positionNode() : this.highlightBone
     if (gizmo && anchor && gizmo.visible) {
@@ -1490,8 +1498,14 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
       // hinge·도달반경 제약으로 관절이 타겟에 못 미치면 기즈모도 그 자리에 멈춘다 (종원 2026-09-10)
       _boneMatrix.multiplyMatrices(_matrixWorldInv, anchor.matrixWorld)
       _vector.setFromMatrixPosition(_boneMatrix)
-      _rotMatrix.extractRotation(this.root.matrixWorld)
-      gizmo.quaternion.setFromRotationMatrix(_rotMatrix).invert()
+      if (this.gizmoSpace === 'local' && !this.rootEditing) {
+        // 로컬 좌표계 — 선택 관절 축(헬퍼 좌표계 기준 관절 회전 = 월드에서 관절 회전). 드래그 중엔 잡을 때 방향 유지:
+        // 위치(IK) 드래그로 관절이 돌아도 잡은 축 화살표가 같이 돌지 않게(드래그 축은 시작 때 고정) (종원 2026-10-01)
+        if (!gizmo.active) gizmo.quaternion.setFromRotationMatrix(_rotMatrix.extractRotation(_boneMatrix))
+      } else {
+        _rotMatrix.extractRotation(this.root.matrixWorld)
+        gizmo.quaternion.setFromRotationMatrix(_rotMatrix).invert()
+      }
       gizmo.position.copy(_vector)
     }
     Object3D.prototype.updateMatrixWorld.call(this, force)
