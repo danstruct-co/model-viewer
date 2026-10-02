@@ -16,7 +16,7 @@ import {
  * 화면 크기 고정 관절 기즈모 공통 (종원 2026-09-15) — 이동·회전 기즈모가 같은 크기 계산·잡기·강조 규칙을 쓴다.
  * 크기 = 기즈모별 화면 px 반지름 고정(블렌더처럼 줌 무관) — 월드 크기(7.2cm)면 기본 줌에서 반지름 22px 라 핸들끼리 겹쳐 잡기
  * 어려웠다(2026-09-14 실측). 선 굵기도 화면 px 고정 — 기즈모 크기가 달라도 같은 굵기로 보인다.
- * 위치(선택 관절)·월드 정렬은 CustomSkeletonHelper 가 매 프레임 잡고, 크기·카메라 방향은 그리기 직전에 잡는다.
+ * 위치(선택 관절)·방향(월드 정렬 또는 관절 로컬 축)은 CustomSkeletonHelper 가 매 프레임 잡고, 크기·카메라 방향은 그리기 직전에 잡는다.
  * 픽·드래그는 마지막으로 그린 행렬 기준(보이는 그대로)
  */
 export type GizmoHandle = 'x' | 'y' | 'z' | 'view' | 'trackball'
@@ -84,6 +84,9 @@ export default abstract class ScreenGizmo extends Group {
   protected readonly toCam = new Vector3()
   protected readonly camRight = new Vector3()
   protected readonly camUp = new Vector3()
+  /** frame() 결과 — 기즈모 X/Y/Z 축의 월드 방향·기즈모 월드 방향. 월드 좌표계면 월드 축 그대로, 로컬이면 선택 관절 축 (종원 2026-10-01 좌표계) */
+  protected readonly axes = AXIS_DIRS.map((dir) => dir.clone())
+  protected readonly orient = new Quaternion()
 
   constructor(radiusPx: number) {
     super()
@@ -125,6 +128,8 @@ export default abstract class ScreenGizmo extends Group {
     this.toCam.setFromMatrixPosition(camera.matrixWorld).sub(this.center).normalize()
     this.camRight.setFromMatrixColumn(camera.matrixWorld, 0).normalize()
     this.camUp.setFromMatrixColumn(camera.matrixWorld, 1).normalize()
+    this.matrixWorld.decompose(_pos, this.orient, _scl)
+    this.axes.forEach((axis, i) => axis.copy(AXIS_DIRS[i]).applyQuaternion(this.orient))
     return radius
   }
 
