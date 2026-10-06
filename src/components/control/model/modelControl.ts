@@ -338,7 +338,7 @@ export default class ModelControl {
     this.skeletonHelper?.setGizmoMode(mode)
   }
 
-  /** 기즈모 좌표계 — world = 월드 축 / local = 선택 관절 로컬 축 (종원 2026-10-01). 위치 편집(루트)은 늘 월드 */
+  /** 기즈모 좌표계 — world = 월드 축 / local = 선택 관절(위치 편집 중엔 대상 노드) 로컬 축 (종원 2026-10-01, 위치 편집 2026-10-06) */
   setSkeletonGizmoSpace(space: SkeletonGizmoSpace) {
     this.skeletonGizmoSpace = space
     this.skeletonHelper?.setGizmoSpace(space)

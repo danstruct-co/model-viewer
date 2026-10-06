@@ -1498,9 +1498,10 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
       // hinge·도달반경 제약으로 관절이 타겟에 못 미치면 기즈모도 그 자리에 멈춘다 (종원 2026-09-10)
       _boneMatrix.multiplyMatrices(_matrixWorldInv, anchor.matrixWorld)
       _vector.setFromMatrixPosition(_boneMatrix)
-      if (this.gizmoSpace === 'local' && !this.rootEditing) {
-        // 로컬 좌표계 — 선택 관절 축(헬퍼 좌표계 기준 관절 회전 = 월드에서 관절 회전). 드래그 중엔 잡을 때 방향 유지:
-        // 위치(IK) 드래그로 관절이 돌아도 잡은 축 화살표가 같이 돌지 않게(드래그 축은 시작 때 고정) (종원 2026-10-01)
+      if (this.gizmoSpace === 'local') {
+        // 로컬 좌표계 — 선택 관절(위치 편집 중엔 대상 노드) 축(헬퍼 좌표계 기준 관절 회전 = 월드에서 관절 회전). 드래그 중엔 잡을 때 방향 유지:
+        // 위치(IK) 드래그로 관절이 돌아도 잡은 축 화살표가 같이 돌지 않게(드래그 축은 시작 때 고정) (종원 2026-10-01).
+        // 위치 편집도 같은 구조 (종원 2026-10-06) — 드래그 식(월드 목표 → 부모 공간, 부모월드⁻¹·R·부모월드)은 축 방향과 무관
         if (!gizmo.active) gizmo.quaternion.setFromRotationMatrix(_rotMatrix.extractRotation(_boneMatrix))
       } else {
         _rotMatrix.extractRotation(this.root.matrixWorld)
