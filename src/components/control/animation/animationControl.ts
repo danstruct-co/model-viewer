@@ -103,7 +103,10 @@ export default class AnimationControl {
       return 0
     }
 
-    return this.actions[0].time
+    // 길이 0 클립(키 1개 — 포즈)은 three AnimationAction 이 재생 시각을 길이로 나눠 time 이 NaN 이 된다.
+    // 그대로 내보내면 소비자의 프레임 계산·편집 캡처가 NaN 을 퍼뜨린다(스튜디오 포즈 모션 편집 → 상반신 날아감·편집 목록 NaN, 종원 2026-10-06)
+    const time = this.actions[0].time
+    return Number.isFinite(time) ? time : 0
   }
 
   setTimeScale(scale: number) {
