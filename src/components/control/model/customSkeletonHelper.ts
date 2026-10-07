@@ -782,13 +782,14 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
     return this.gizmoMode === 'rotate' ? this.rotateGizmo : this.moveGizmo
   }
 
-  /** 기즈모 핸들 피킹 — 화면 px 기준. 이동의 가운데 흰 원·회전의 트랙볼 자리에 다른 관절 구가 있으면 그 관절 선택이 우선
-   *  (null → 호출측 관절 호버·클릭 경로) */
+  /** 기즈모 핸들 피킹 — 화면 px 기준. 핸들 자리에 다른 관절 구가 있으면 그 관절 선택이 우선(null → 호출측 관절 호버·클릭 경로).
+   *  처음엔 가운데 흰 원·트랙볼만 양보했는데, 두 손이 가까우면 고른 손목의 회전 링이 다른 손목 구를 덮어 그 손목을 고를 수
+   *  없고 누르면 고른 손목이 돌았다(손 합성 QA 2026-10-07) — 축·화면 링도 양보한다. 구는 작아 링 잡기는 거의 안 막힌다 */
   pickGizmoHandle(raycaster: Raycaster, pointer: Vector2, viewport: Vector2): GizmoHandle | null {
     const gizmo = this.activeGizmo()
     if (!gizmo?.visible || !this.jointBones) return null
     const handle = gizmo.pick(raycaster.camera, pointer, viewport)
-    if (!this.rootEditing && (handle === 'trackball' || (handle === 'view' && this.gizmoMode === 'move'))) {
+    if (!this.rootEditing && handle !== null) {
       const hit = this.pickJoint(raycaster)
       // 잠금 관절은 선택이 안 되니 기즈모 우선 — hips 흰 원·트랙볼 둘레가 잠금 관절(spine1·허벅지)이라 (종원 2026-09-15)
       if (hit && !hit.locked && this.jointBones[hit.index] !== this.highlightBone) return null
