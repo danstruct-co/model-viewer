@@ -78,6 +78,8 @@ const ModelViewer = React.forwardRef<HTMLCanvasElement, ModelViewerProps>(
       const coreNodeFinder = new CoreNodeFinder({ nodes, actions, coreKeys: coreNodeKeys })
 
       const orbitControlRef = useRef<OrbitControlsImpl>(null)
+      // 축 기즈모 트윈 동안 지킬 카메라~피벗 거리 (onTarget 에서 잡는다)
+      const axisTweenDistanceRef = useRef<number | null>(null)
       const skyRef = useRef<SkyImpl>(null)
       const groundRef = useRef<MeshStandardMaterial>(null)
 
@@ -385,10 +387,22 @@ const ModelViewer = React.forwardRef<HTMLCanvasElement, ModelViewerProps>(
               onTarget={() => {
                 const target =
                   cameraControlRef.current?.getResetTarget() ?? orbitControlRef.current?.target ?? new Vector3()
+                // 트윈 동안 지킬 거리 = 지금 카메라 ~ 피벗. drei 는 반경을 원점까지 거리로 재서(피벗이 원점이 아니면) 누를 때마다
+                // 조금씩 멀어지고, 트윈 중 연타하면 쌓였다(축 구 6번 → 8.19 → 11.33, QA 2026-10-07)
+                const camera = orbitControlRef.current?.object
+                axisTweenDistanceRef.current = camera ? camera.position.distanceTo(target) : null
                 orbitControlRef.current?.target.copy(target)
                 return target
               }}
-              onUpdate={() => orbitControlRef.current?.update()}
+              onUpdate={() => {
+                const controls = orbitControlRef.current
+                const distance = axisTweenDistanceRef.current
+                if (controls && distance) {
+                  const offset = controls.object.position.clone().sub(controls.target)
+                  if (offset.lengthSq() > 0) controls.object.position.copy(controls.target).add(offset.setLength(distance))
+                }
+                controls?.update()
+              }}
             >
               <AxisGizmoViewport />
             </GizmoHelper>
