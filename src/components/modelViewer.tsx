@@ -117,9 +117,9 @@ const ModelViewer = React.forwardRef<HTMLCanvasElement, ModelViewerProps>(
           sharedSky?.dispatchEvent({ type: 'dispose' })
           // 환경 텍스처는 닫을 때 Environment 가 먼저 떼어 비어 있다 — 매 프레임 기억해 둔 것으로
           envSeenRef.current?.dispatchEvent({ type: 'dispose' })
-          // WebGL 컨텍스트도 바로 돌려준다 — 스튜디오 편집 확인 창을 열고 닫을 때마다 뷰어 2개의 컨텍스트가 남아 20번이면 41개(크롬 한도 16 근처,
-          // 메인 뷰어 컨텍스트를 잃을 수 있음, 스튜디오 QA 2026-10-12 hard-stress B6)
-          gl.forceContextLoss()
+          // 여기서 gl.forceContextLoss() 금지 — Model 은 url 이 바뀔 때마다 새로 붙지만 Canvas·렌더러는 그대로라, 모션을 바꿔 열면 살아 있는
+          // 렌더러 컨텍스트를 죽여 새 모델 셰이더 컴파일이 'null.trim' 으로 실패, 뷰어가 "파일을 띄우지 못했어요"로 죽었다(QA 2026-10-12 R2-B1).
+          // 컨텍스트 반납은 Canvas 가 닫힐 때 R3F 가 한다(unmountComponentAtNode → forceContextLoss)
           gl.dispose()
         }
       }, [])
