@@ -412,6 +412,11 @@ export default class ModelControl {
     return this.skeletonHelper?.getRootTransform() ?? null
   }
 
+  /** 루트 노드 처음 값 — 스튜디오 원점 좌우 반전 (종원 2026-10-12) */
+  getSkeletonRootOrigin() {
+    return this.skeletonHelper?.getRootOrigin() ?? null
+  }
+
   setSkeletonRootTransform(position: [number, number, number], rotation: [number, number, number]) {
     this.skeletonHelper?.setRootTransform(position, rotation)
   }

@@ -35,6 +35,7 @@ const _basisZ = new Vector3()
 const _boneScale = new Vector3()
 const _scale = new Vector3()
 const _quat = new Quaternion()
+const _ceQuat = new Quaternion() // compatibleEuler
 const _rotMatrix = new Matrix4()
 const _boneMatrix = new Matrix4()
 const _parentMatrix = new Matrix4()
@@ -987,6 +988,12 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
     if (this.hipsMarker) this.hipsMarker.visible = this.rootEditing && this.positionTarget === 'character'
   }
 
+  /** 루트 노드 처음 값(처음 로드한 위치·회전) — 스튜디오 원점 좌우 반전 공식 S·M·B⁻¹·S·B 의 B (종원 2026-10-12, QA hard-output B3) */
+  getRootOrigin(): { position: [number, number, number]; quaternion: [number, number, number, number] } | null {
+    const origin = this.rootNode && rootOrigins.get(this.rootNode)
+    return origin ? { position: [origin.position.x, origin.position.y, origin.position.z], quaternion: [origin.quaternion.x, origin.quaternion.y, origin.quaternion.z, origin.quaternion.w] } : null
+  }
+
   /** 루트 노드 로컬 트랜스폼 — 패널 표시·저장용 */
   getRootTransform(): SkeletonRootTransform | null {
     const node = this.rootNode
@@ -1563,6 +1570,9 @@ export function holdRootEdit(node: Object3D | undefined) {
  *  XYZ 분해는 가운데 Y 가 ±90° 에 묶여, Y 로 90° 넘게 돌리면 같은 회전이 (180, 180−y, 180) 으로 뒤집혀 보인다(쿼터니언은 연속).
  *  같은 회전의 두 표현 (x, y, z)·(x+π, π−y, z+π) 의 각 성분을 직전 값 ±π 안으로 감고 가까운 쪽을 고른다 */
 export function compatibleEuler(q: Quaternion, prev: Euler | undefined): Euler {
+  // 직전 표시 값이 이미 이 회전이면 그대로 — Y ±90°(짐벌)에선 X·Z 가 같은 축이라 다시 분해하면 넣은 X·Z 가 한쪽으로 몰려
+  // 원점 회전 Y 90 · X 30 · Z 15 를 넣으면 칸이 X 45 · Z 0 으로 바뀌었다 (스튜디오 QA 2026-10-12 hard-global B1)
+  if (prev && Math.abs(_ceQuat.setFromEuler(prev).dot(q)) > 1 - 1e-12) return prev.clone()
   const a = new Euler().setFromQuaternion(q, 'XYZ')
   if (!prev) return a
   const b = new Euler(a.x + Math.PI, Math.PI - a.y, a.z + Math.PI, 'XYZ')
