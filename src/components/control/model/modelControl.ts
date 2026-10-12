@@ -445,6 +445,11 @@ export default class ModelControl {
     return this.skeletonHelper?.freezeIKPose() ?? null
   }
 
+  /** 편집 세션 원 포즈(IK 를 풀면 돌아갈 포즈) 사본 — 없으면 null (종원 2026-10-12) */
+  getSkeletonIKOriginPose() {
+    return this.skeletonHelper?.getIKOriginPose() ?? null
+  }
+
   /** 저장한 단계 포즈로 즉시 복원(다시 풀지 않음, 드래그 타겟은 내려놓음) — 기즈모 되돌리기/다시하기 (종원 2026-09-14) */
   holdSkeletonIKPose(pose: Float64Array) {
     this.skeletonHelper?.holdIKPose(pose)

@@ -1116,6 +1116,11 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
     this.hingeState.clear()
   }
 
+  /** 편집 세션 원 포즈 사본(세션 없으면 null) — 스튜디오 구간 편집이 '편집 전' 포즈를 편집 카드에 기억해 두려고 (종원 2026-10-12) */
+  getIKOriginPose(): Float64Array | null {
+    return this.ikOriginPose ? this.ikOriginPose.slice() : null
+  }
+
   /** 지금 포즈를 굳힘 — 이후 솔브 없이 유지. 굳힌 포즈 사본 반환(기즈모 조작 단계 저장용), 편집 세션 없으면 null (종원 2026-09-14) */
   freezeIKPose(): Float64Array | null {
     if (!this.ikOriginPose) return null
