@@ -13,8 +13,17 @@ export function disposeObject(root: Object3D) {
     mesh.skeleton?.dispose()
     for (const m of Array.isArray(mesh.material) ? mesh.material : mesh.material ? [mesh.material] : []) materials.add(m)
   })
+  const textures = new Set<Texture>()
+  const collect = (value: unknown) => {
+    if ((value as Texture | null)?.isTexture) textures.add(value as Texture)
+  }
   materials.forEach((m) => {
-    for (const value of Object.values(m)) if ((value as Texture | null)?.isTexture) (value as Texture).dispose()
+    Object.values(m).forEach(collect)
+    // 셰이더 재질(MToon 툰 등)은 텍스처를 uniforms 에 든다(map 은 그 getter) — 안 보면 Toon 을 켠 채 모션을 바꿀 때 텍스처가 안 풀렸다
+    // (스튜디오 QA 2026-10-13 R4 explore R4-B4, 한 번에 +11)
+    const uniforms = (m as Material & { uniforms?: Record<string, { value?: unknown }> }).uniforms
+    if (uniforms) Object.values(uniforms).forEach((u) => collect(u?.value))
     m.dispose()
   })
+  textures.forEach((t) => t.dispose())
 }

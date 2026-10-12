@@ -158,10 +158,12 @@ const ModelViewer = React.forwardRef<HTMLCanvasElement, ModelViewerProps>(
         // 열고 닫을 때마다 힙 +0.6~0.95MB·노드 +353, 힙 스냅샷 경로 = 메인 Sky 재질 _listeners.dispose → 닫힌 렌더러, 스튜디오 QA 2026-10-12
         // hard-stress B6). 닫을 때 공용 자원에 dispose 를 보내 모든 렌더러가 자기 리스너를 떼게 한다 — 살아 있는 다른 뷰어는 다음 프레임에 다시 올린다
         const sharedSky = skyRef.current?.material as Material | undefined // ref 는 닫을 때 이미 비어 있다 — 지금 잡아 둔다
+        const skyBox = skyRef.current?.geometry // 하늘 상자는 모델마다 새로 만든다 — 재질(모듈 공용)은 두고 상자만 놓는다 (R4 explore r4x-a7c)
         return () => {
           onDispose?.(modelViewerControl)
           dracoLoaderRef.current?.dispose()
           sharedSky?.dispatchEvent({ type: 'dispose' })
+          skyBox?.dispose()
           // 환경 텍스처는 닫을 때 Environment 가 먼저 떼어 비어 있다 — 매 프레임 기억해 둔 것으로
           envSeenRef.current?.dispatchEvent({ type: 'dispose' })
           // 여기서 gl.forceContextLoss() 금지 — Model 은 url 이 바뀔 때마다 새로 붙지만 Canvas·렌더러는 그대로라, 모션을 바꿔 열면 살아 있는

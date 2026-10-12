@@ -3,6 +3,7 @@ import { BackgroundType, EnvironmentControlParams } from './types'
 import { Sky } from 'three-stdlib'
 import { backgroundSettings } from './mapper'
 import { InfiniteGridHelper } from '../../object/mesh/infiniteGridHelper'
+import { disposeObject } from '../model/disposeObject'
 
 export default class EnvironmentControl {
   private scene: Scene
@@ -92,6 +93,9 @@ export default class EnvironmentControl {
   private removeGrid() {
     if (this.scene.userData.gridHelper) {
       this.scene.remove(this.scene.userData.gridHelper)
+      // 빼기만 하면 GPU 지오메트리·재질이 남았다(배경을 바꿀 때마다 +1, 스튜디오 QA 2026-10-13 R4 explore r4x-a7c)
+      disposeObject(this.scene.userData.gridHelper)
+      this.scene.userData.gridHelper = undefined
       this.gridHelper = undefined
     }
 
@@ -116,6 +120,8 @@ export default class EnvironmentControl {
   private removeShadow() {
     if (this.scene.userData.shadow) {
       this.scene.remove(this.scene.userData.shadow)
+      disposeObject(this.scene.userData.shadow) // 위와 같은 이유
+      this.scene.userData.shadow = undefined
       this.shadow = undefined
     }
 
