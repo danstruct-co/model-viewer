@@ -102,7 +102,7 @@ const ModelViewer = React.forwardRef<HTMLCanvasElement, ModelViewerProps>(
 
         const modelViewerControl = {
           modelControl,
-          animationControl: animationControl,
+          animationControl,
           cameraControl,
           environmentControl,
           audioControl,
@@ -373,7 +373,7 @@ const ModelViewer = React.forwardRef<HTMLCanvasElement, ModelViewerProps>(
       const initializeAudioControl = (animationControl: AnimationControl) => {
         audioControlRef.current = new AudioControl({
           audio: audioSetting?.url ? audioRef.current : null,
-          animationControl: animationControl,
+          animationControl,
           option: { defaultVolume: audioSetting?.defaultVolume },
         })
 
@@ -401,7 +401,8 @@ const ModelViewer = React.forwardRef<HTMLCanvasElement, ModelViewerProps>(
               alignment="top-right"
               margin={[50, 50]}
               onTarget={() => {
-                const target = cameraControlRef.current?.getResetTarget() ?? orbitControlRef.current?.target ?? new Vector3()
+                const target =
+                  cameraControlRef.current?.getResetTarget() ?? orbitControlRef.current?.target ?? new Vector3()
                 // 트윈 동안 지킬 거리 = 지금 카메라 ~ 피벗. drei 는 반경을 원점까지 거리로 재서(피벗이 원점이 아니면) 누를 때마다
                 // 조금씩 멀어지고, 트윈 중 연타하면 쌓였다(축 구 6번 → 8.19 → 11.33, QA 2026-10-07)
                 const camera = orbitControlRef.current?.object
