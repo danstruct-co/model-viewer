@@ -73,8 +73,19 @@ export default class CameraControl {
       return
     }
     setTimeout(() => {
+      this.stopInertia()
       this.control?.initialize()
     })
+  }
+
+  /** 끌기 관성(damping 남은 회전·팬) 버리기 — 구도를 새로 잡기 전에. 안 버리면 끌어 놓은 직후 초기화해도 새 구도에서 계속 돌았다
+   *  (47°, 스튜디오 QA 2026-10-12 R2 hard-ui R2-B2). OrbitControls 는 남은 속도를 감춰 두고 damping 을 끈 update 에서만 비운다 */
+  private stopInertia() {
+    const orbit = this.params.orbitControl
+    if (!orbit?.enableDamping) return
+    orbit.enableDamping = false
+    orbit.update()
+    orbit.enableDamping = true
   }
 
   setCoreNode(index: number) {
@@ -91,6 +102,7 @@ export default class CameraControl {
   }
 
   resetPosition() {
+    this.stopInertia()
     this.control?.resetPosition()
   }
 
