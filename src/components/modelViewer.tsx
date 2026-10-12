@@ -6,7 +6,18 @@ import SharedSoftShadows from './sharedSoftShadows'
 import { Canvas, useFrame, useLoader, useThree } from '@react-three/fiber'
 import React, { Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import type { State } from './control/animation/types'
-import { Color, MeshStandardMaterial, PCFSoftShadowMap, Raycaster, Vector2, Vector3, type Material, type Object3D, type Texture } from 'three'
+import {
+  Color,
+  MeshStandardMaterial,
+  PCFSoftShadowMap,
+  Raycaster,
+  Vector2,
+  Vector3,
+  type Material,
+  type Object3D,
+  type Texture,
+  type WebGLRenderer,
+} from 'three'
 import AnimationControl from './control/animation/animationControl'
 import { OrbitControls as OrbitControlsImpl, Sky as SkyImpl } from 'three-stdlib'
 import CameraControl from './control/camera/cameraControl'
@@ -63,12 +74,13 @@ const ModelViewer = React.forwardRef<HTMLCanvasElement, ModelViewerProps>(
     const [progress, setProgress] = useState(0)
 
     // 읽은 모델 해제 (스튜디오 QA 2026-10-13 R3 hard-stress R3-B1) — useLoader 는 URL 로 GLTF 를 모듈 캐시에 들고 있어, 모션마다 새 blob URL 로
-    // 열면 옛 모델(버퍼 ~17MB)이 그대로 남아 30번 바꾸면 +500MB 였다. URL 이 바뀌면(또는 뷰어가 닫히면) 옛 URL 캐시를 비우고 GPU 자원도 놓는다.
-    // 마운트 때 정리는 하지 않는다 — 개발 모드 StrictMode 가 effect 를 한 번 떼었다 붙이는데, 그때 캐시를 비우면 다음 렌더의 useLoader 가 새로
-    // 읽어 다른 모델이 된다(닫힘은 한 틱 미뤄 다시 붙으면 취소)
+    // 열면 옛 모델(버퍼 ~17MB)이 그대로 남아 30번 바꾸면 +500MB 였다. 새 모델이 실제로 붙은 뒤(Model 마운트) 옛 URL 캐시를 비우고 GPU 자원도
+    // 놓는다 — URL 이 바뀐 순간에 놓으면 새 모델을 읽는 동안 옛 모델이 계속 그려져 텍스처·버퍼가 다시 올라가고 그건 못 놓았다(모션마다 텍스처
+    // +12, R4 explore R4-B1). 뷰어가 닫히면 지금 모델도 놓는다(개발 모드 StrictMode 가 effect 를 떼었다 붙이므로 한 틱 미뤄 다시 붙으면 취소)
     const loadedScenesRef = useRef(new Map<string, Object3D>())
     const shownUrlRef = useRef<string>()
     const releaseTimerRef = useRef<ReturnType<typeof setTimeout>>()
+    const glRef = useRef<WebGLRenderer>()
     const releaseModel = (target: string) => {
       const scene = loadedScenesRef.current.get(target)
       loadedScenesRef.current.delete(target)
@@ -76,14 +88,15 @@ const ModelViewer = React.forwardRef<HTMLCanvasElement, ModelViewerProps>(
       if (scene) disposeObject(scene)
     }
     useEffect(() => {
-      const prev = shownUrlRef.current
       shownUrlRef.current = url
-      if (prev && prev !== url) releaseModel(prev)
     }, [url])
     useEffect(() => {
       clearTimeout(releaseTimerRef.current)
       return () => {
-        releaseTimerRef.current = setTimeout(() => shownUrlRef.current && releaseModel(shownUrlRef.current))
+        releaseTimerRef.current = setTimeout(() => {
+          if (shownUrlRef.current) releaseModel(shownUrlRef.current)
+          glRef.current?.dispose() // 모델 텍스처를 놓은 다음에 — 먼저 하면 텍스처 GL 객체를 못 찾는다
+        })
       }
     }, [])
 
@@ -105,6 +118,7 @@ const ModelViewer = React.forwardRef<HTMLCanvasElement, ModelViewerProps>(
       useMemo(() => renameMeshesShadowingBones(scene), [scene])
       const { actions, mixer } = useAnimations(animations, scene)
       const { scene: defaultScene, camera: defaultCamera, gl } = useThree()
+      glRef.current = gl
       const coreNodeFinder = new CoreNodeFinder({ nodes, actions, coreKeys: coreNodeKeys })
 
       const orbitControlRef = useRef<OrbitControlsImpl>(null)
@@ -135,6 +149,9 @@ const ModelViewer = React.forwardRef<HTMLCanvasElement, ModelViewerProps>(
           audioControl,
         }
         onLoaded?.(modelViewerControl)
+        // 새 모델이 붙었다 — 옛 모델은 이제 장면에 없으니 놓는다(다음 틱, 렌더가 끝난 뒤)
+        const stale = Array.from(loadedScenesRef.current.keys()).filter((u) => u !== url)
+        if (stale.length) setTimeout(() => stale.forEach((u) => u !== shownUrlRef.current && releaseModel(u)))
 
         // 여러 뷰어가 같이 쓰는 three 자원 — three-stdlib Sky 의 모듈 공용 재질, drei Environment 가 캐시한 HDR 텍스처. 렌더러마다 이 자원에
         // 정리('dispose') 리스너를 붙이는데, 렌더러가 사라져도 리스너가 남아 그 렌더러·캔버스·씬을 통째로 붙잡았다(스튜디오 편집 확인 창을
@@ -149,8 +166,9 @@ const ModelViewer = React.forwardRef<HTMLCanvasElement, ModelViewerProps>(
           envSeenRef.current?.dispatchEvent({ type: 'dispose' })
           // 여기서 gl.forceContextLoss() 금지 — Model 은 url 이 바뀔 때마다 새로 붙지만 Canvas·렌더러는 그대로라, 모션을 바꿔 열면 살아 있는
           // 렌더러 컨텍스트를 죽여 새 모델 셰이더 컴파일이 'null.trim' 으로 실패, 뷰어가 "파일을 띄우지 못했어요"로 죽었다(QA 2026-10-12 R2-B1).
-          // 컨텍스트 반납은 Canvas 가 닫힐 때 R3F 가 한다(unmountComponentAtNode → forceContextLoss)
-          gl.dispose()
+          // 컨텍스트 반납은 Canvas 가 닫힐 때 R3F 가 한다(unmountComponentAtNode → forceContextLoss).
+          // gl.dispose() 도 여기선 안 한다 — 살아 있는 렌더러의 자원 기록(properties)을 비워, 그 뒤 옛 모델 텍스처 dispose 가 GL 텍스처를 못 찾아
+          // deleteTexture 없이 남았다(모션 바꿀 때마다 +20, 스튜디오 QA 2026-10-13 R4 explore R4-B1). 뷰어가 닫힐 때 옛 모델을 놓은 뒤에 한다(위 releaseTimer)
         }
       }, [])
 
