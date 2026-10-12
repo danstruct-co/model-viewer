@@ -511,6 +511,11 @@ const ModelViewer = React.forwardRef<HTMLCanvasElement, ModelViewerProps>(
               camera={{ fov: 20 }}
               gl={{ antialias: true, powerPreference: 'high-performance', alpha: true, stencil: true, depth: true, preserveDrawingBuffer: false }}
               dpr={Math.min(window.devicePixelRatio, 2)}
+              // 운영에선 셰이더마다 컴파일 결과를 바로 확인(getProgramParameter·InfoLog)하지 않는다 — GPU 를 동기로 기다려 새 뷰어(스튜디오 편집 확인 창)가
+              // 뜰 때 메인 스레드가 수 초 멈췄다(스튜디오 QA 2026-10-13 R2 stress Q1, 종원 결정). 개발 모드는 오류를 보려고 켠 채
+              onCreated={({ gl }) => {
+                gl.debug.checkShaderErrors = process.env.NODE_ENV !== 'production'
+              }}
             >
               {model}
               <color ref={backgroundColorRef} attach="background" />
