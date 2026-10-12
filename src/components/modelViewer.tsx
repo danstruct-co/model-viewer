@@ -6,7 +6,7 @@ import SharedSoftShadows from './sharedSoftShadows'
 import { Canvas, useFrame, useLoader, useThree } from '@react-three/fiber'
 import React, { Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import type { State } from './control/animation/types'
-import { Color, MeshStandardMaterial, PCFSoftShadowMap, Raycaster, Vector2, Vector3, type Material, type Texture } from 'three'
+import { Color, MeshStandardMaterial, PCFSoftShadowMap, Raycaster, Vector2, Vector3, type Material, type Object3D, type Texture } from 'three'
 import AnimationControl from './control/animation/animationControl'
 import { OrbitControls as OrbitControlsImpl, Sky as SkyImpl } from 'three-stdlib'
 import CameraControl from './control/camera/cameraControl'
@@ -21,6 +21,7 @@ import { ErrorBoundary } from 'react-error-boundary'
 import Error from './error'
 import CoreNodeFinder from '../coreNodeFinder/coreNodeFinder'
 import { renameMeshesShadowingBones } from './control/model/boneNames'
+import { disposeObject } from './control/model/disposeObject'
 
 const ModelViewer = React.forwardRef<HTMLCanvasElement, ModelViewerProps>(
   (
@@ -61,6 +62,31 @@ const ModelViewer = React.forwardRef<HTMLCanvasElement, ModelViewerProps>(
 
     const [progress, setProgress] = useState(0)
 
+    // 읽은 모델 해제 (스튜디오 QA 2026-10-13 R3 hard-stress R3-B1) — useLoader 는 URL 로 GLTF 를 모듈 캐시에 들고 있어, 모션마다 새 blob URL 로
+    // 열면 옛 모델(버퍼 ~17MB)이 그대로 남아 30번 바꾸면 +500MB 였다. URL 이 바뀌면(또는 뷰어가 닫히면) 옛 URL 캐시를 비우고 GPU 자원도 놓는다.
+    // 마운트 때 정리는 하지 않는다 — 개발 모드 StrictMode 가 effect 를 한 번 떼었다 붙이는데, 그때 캐시를 비우면 다음 렌더의 useLoader 가 새로
+    // 읽어 다른 모델이 된다(닫힘은 한 틱 미뤄 다시 붙으면 취소)
+    const loadedScenesRef = useRef(new Map<string, Object3D>())
+    const shownUrlRef = useRef<string>()
+    const releaseTimerRef = useRef<ReturnType<typeof setTimeout>>()
+    const releaseModel = (target: string) => {
+      const scene = loadedScenesRef.current.get(target)
+      loadedScenesRef.current.delete(target)
+      useLoader.clear(GLTFLoader, target)
+      if (scene) disposeObject(scene)
+    }
+    useEffect(() => {
+      const prev = shownUrlRef.current
+      shownUrlRef.current = url
+      if (prev && prev !== url) releaseModel(prev)
+    }, [url])
+    useEffect(() => {
+      clearTimeout(releaseTimerRef.current)
+      return () => {
+        releaseTimerRef.current = setTimeout(() => shownUrlRef.current && releaseModel(shownUrlRef.current))
+      }
+    }, [])
+
     const Model = () => {
       const { nodes, scene, animations } = useLoader(
         GLTFLoader,
@@ -74,6 +100,7 @@ const ModelViewer = React.forwardRef<HTMLCanvasElement, ModelViewerProps>(
         },
         ({ loaded, total }) => setProgress((loaded / total) * 100)
       )
+      loadedScenesRef.current.set(url, scene)
       // 트랙 바인딩(useAnimations) 전에 — 뼈와 이름이 겹친 메시가 뼈 트랙을 가로챘다 (스튜디오 QA 2026-10-13 R2 hard-matrix R2-B5)
       useMemo(() => renameMeshesShadowingBones(scene), [scene])
       const { actions, mixer } = useAnimations(animations, scene)
