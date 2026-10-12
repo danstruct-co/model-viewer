@@ -6,7 +6,7 @@ import SharedSoftShadows from './sharedSoftShadows'
 import { Canvas, useFrame, useLoader, useThree } from '@react-three/fiber'
 import React, { Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import type { State } from './control/animation/types'
-import { Color, MeshStandardMaterial, PCFSoftShadowMap, Raycaster, Vector2, Vector3 } from 'three'
+import { Color, MeshStandardMaterial, PCFSoftShadowMap, Raycaster, Vector2, Vector3, type Material, type Texture } from 'three'
 import AnimationControl from './control/animation/animationControl'
 import { OrbitControls as OrbitControlsImpl, Sky as SkyImpl } from 'three-stdlib'
 import CameraControl from './control/camera/cameraControl'
@@ -81,6 +81,7 @@ const ModelViewer = React.forwardRef<HTMLCanvasElement, ModelViewerProps>(
       // 축 기즈모 트윈 동안 지킬 카메라~피벗 거리 (onTarget 에서 잡는다)
       const axisTweenDistanceRef = useRef<number | null>(null)
       const skyRef = useRef<SkyImpl>(null)
+      const envSeenRef = useRef<Texture | null>(null) // 이 뷰어 씬의 환경 텍스처(공용 캐시) — 닫을 때 정리 리스너 떼기용
       const groundRef = useRef<MeshStandardMaterial>(null)
 
       const modelControlRef = useRef<ModelControl>()
@@ -105,14 +106,26 @@ const ModelViewer = React.forwardRef<HTMLCanvasElement, ModelViewerProps>(
         }
         onLoaded?.(modelViewerControl)
 
+        // 여러 뷰어가 같이 쓰는 three 자원 — three-stdlib Sky 의 모듈 공용 재질, drei Environment 가 캐시한 HDR 텍스처. 렌더러마다 이 자원에
+        // 정리('dispose') 리스너를 붙이는데, 렌더러가 사라져도 리스너가 남아 그 렌더러·캔버스·씬을 통째로 붙잡았다(스튜디오 편집 확인 창을
+        // 열고 닫을 때마다 힙 +0.6~0.95MB·노드 +353, 힙 스냅샷 경로 = 메인 Sky 재질 _listeners.dispose → 닫힌 렌더러, 스튜디오 QA 2026-10-12
+        // hard-stress B6). 닫을 때 공용 자원에 dispose 를 보내 모든 렌더러가 자기 리스너를 떼게 한다 — 살아 있는 다른 뷰어는 다음 프레임에 다시 올린다
+        const sharedSky = skyRef.current?.material as Material | undefined // ref 는 닫을 때 이미 비어 있다 — 지금 잡아 둔다
         return () => {
           onDispose?.(modelViewerControl)
           dracoLoaderRef.current?.dispose()
+          sharedSky?.dispatchEvent({ type: 'dispose' })
+          // 환경 텍스처는 닫을 때 Environment 가 먼저 떼어 비어 있다 — 매 프레임 기억해 둔 것으로
+          envSeenRef.current?.dispatchEvent({ type: 'dispose' })
+          // WebGL 컨텍스트도 바로 돌려준다 — 스튜디오 편집 확인 창을 열고 닫을 때마다 뷰어 2개의 컨텍스트가 남아 20번이면 41개(크롬 한도 16 근처,
+          // 메인 뷰어 컨텍스트를 잃을 수 있음, 스튜디오 QA 2026-10-12 hard-stress B6)
+          gl.forceContextLoss()
           gl.dispose()
         }
       }, [])
 
       useFrame(() => {
+        if (defaultScene.environment) envSeenRef.current = defaultScene.environment
         modelControlRef.current?.updateOnFrame()
         cameraControlRef.current?.updateOnFrame()
         animationControlRef.current?.updateOnFrame()
