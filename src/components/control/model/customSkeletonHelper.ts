@@ -35,6 +35,7 @@ const _basisZ = new Vector3()
 const _boneScale = new Vector3()
 const _scale = new Vector3()
 const _quat = new Quaternion()
+const _ceQuat = new Quaternion() // compatibleEuler
 const _rotMatrix = new Matrix4()
 const _boneMatrix = new Matrix4()
 const _parentMatrix = new Matrix4()
@@ -241,6 +242,9 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
   private hipsMarker?: RootMarker
   /** 루트 회전 드래그 — 시작 로컬 회전·부모 월드 회전 */
   private rootDrag?: { local0: Quaternion; parentWorld: Quaternion }
+  /** 위치 편집 이동을 화면(월드) 위아래로만 (스튜디오 제자리 모션, 종원 2026-10-13) — 기즈모는 월드 Y 화살표 하나, 끌어도 월드 X·Z 그대로 */
+  private rootMoveYOnly = false
+  private rootMoveStart?: Vector3
   /** 기즈모 모드 (종원 2026-09-14) — rotate 는 IK 를 안 써 주황 체인이 없다. 두 모드의 드래그는 같은 편집 포즈(ikFrozenPose)에 누적 */
   private gizmoMode: SkeletonGizmoMode = 'move'
   private gizmoSpace: SkeletonGizmoSpace = 'world'
@@ -751,6 +755,7 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
       this.moveGizmo = new MoveGizmo(this.renderOrder + 3) // 관절 구 위
       this.add(this.moveGizmo)
     }
+    this.moveGizmo?.setOnlyAxis(this.rootEditing && this.rootMoveYOnly ? 'y' : null)
     if (show && this.gizmoMode === 'rotate' && !this.rotateGizmo) {
       this.rotateGizmo = new RotateGizmo(this.renderOrder + 3)
       this.add(this.rotateGizmo)
@@ -976,6 +981,14 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
     this.syncGizmoVisibility()
   }
 
+  setRootMoveYOnly(on: boolean) {
+    if (this.rootMoveYOnly === on) return
+    this.cancelGizmoDrag()
+    this.setGizmoHover(null)
+    this.rootMoveYOnly = on
+    this.syncGizmoVisibility()
+  }
+
   /** 위치 편집 대상 노드 — 원점 = 리그 루트 노드, 캐릭터 = hips */
   private positionNode(): Object3D | undefined {
     return this.positionTarget === 'character' ? this.hipsBone : this.rootNode
@@ -985,6 +998,12 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
   private syncPositionMarkers() {
     if (this.rootMarker) this.rootMarker.visible = this.rootEditing && this.positionTarget === 'origin'
     if (this.hipsMarker) this.hipsMarker.visible = this.rootEditing && this.positionTarget === 'character'
+  }
+
+  /** 루트 노드 처음 값(처음 로드한 위치·회전) — 스튜디오 원점 좌우 반전 공식 S·M·B⁻¹·S·B 의 B (종원 2026-10-12, QA hard-output B3) */
+  getRootOrigin(): { position: [number, number, number]; quaternion: [number, number, number, number] } | null {
+    const origin = this.rootNode && rootOrigins.get(this.rootNode)
+    return origin ? { position: [origin.position.x, origin.position.y, origin.position.z], quaternion: [origin.quaternion.x, origin.quaternion.y, origin.quaternion.z, origin.quaternion.w] } : null
   }
 
   /** 루트 노드 로컬 트랜스폼 — 패널 표시·저장용 */
@@ -1041,7 +1060,10 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
     const node = this.positionNode()
     const parent = node?.parent
     if (!node || !parent) return false
-    if (this.gizmoMode === 'move') return this.moveGizmo?.beginDrag(handle, raycaster.camera, raycaster.ray, viewport) ?? false
+    if (this.gizmoMode === 'move') {
+      this.rootMoveStart = node.getWorldPosition(new Vector3())
+      return this.moveGizmo?.beginDrag(handle, raycaster.camera, raycaster.ray, viewport) ?? false
+    }
     if (!this.rotateGizmo) return false
     this.rootDrag = { local0: node.quaternion.clone(), parentWorld: parent.getWorldQuaternion(new Quaternion()) }
     this.rotateGizmo.beginDrag(handle, raycaster.camera, pointer, viewport)
@@ -1056,6 +1078,8 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
     if (!node || !parent) return
     if (this.gizmoMode === 'move') {
       if (!this.moveGizmo?.dragTo(raycaster.ray, _moveTarget)) return
+      // 제자리 모션 — 월드 X·Z 는 잡을 때 그대로(축이 월드 Y 라 이론상 그대로지만 부동소수 오차까지 막는다)
+      if (this.rootMoveYOnly && this.rootMoveStart) _moveTarget.setX(this.rootMoveStart.x).setZ(this.rootMoveStart.z)
       node.position.copy(parent.worldToLocal(_moveTarget))
     } else {
       const drag = this.rootDrag
@@ -1114,6 +1138,11 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
     this.ikBase = undefined
     this.ikFrozenPose = undefined
     this.hingeState.clear()
+  }
+
+  /** 편집 세션 원 포즈 사본(세션 없으면 null) — 스튜디오 구간 편집이 '편집 전' 포즈를 편집 카드에 기억해 두려고 (종원 2026-10-12) */
+  getIKOriginPose(): Float64Array | null {
+    return this.ikOriginPose ? this.ikOriginPose.slice() : null
   }
 
   /** 지금 포즈를 굳힘 — 이후 솔브 없이 유지. 굳힌 포즈 사본 반환(기즈모 조작 단계 저장용), 편집 세션 없으면 null (종원 2026-09-14) */
@@ -1499,7 +1528,9 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
       // hinge·도달반경 제약으로 관절이 타겟에 못 미치면 기즈모도 그 자리에 멈춘다 (종원 2026-09-10)
       _boneMatrix.multiplyMatrices(_matrixWorldInv, anchor.matrixWorld)
       _vector.setFromMatrixPosition(_boneMatrix)
-      if (this.gizmoSpace === 'local') {
+      // 제자리 모션 — 좌표계(월드·로컬)와 무관하게 월드 정렬(아래 else) = 화면 위아래 Y 화살표 하나. 부모 공간 축을 쓰면 앞이 Z-up 인 뼈대
+      // (Unreal FBX hips 부모)에서 Y 화살표가 카메라 쪽으로 누워 잡히지 않았다 (QA 2026-10-13 C-B5)
+      if (this.gizmoSpace === 'local' && !(this.rootEditing && this.rootMoveYOnly && this.gizmoMode === 'move')) {
         // 로컬 좌표계 — 선택 관절(위치 편집 중엔 대상 노드) 축(헬퍼 좌표계 기준 관절 회전 = 월드에서 관절 회전). 드래그 중엔 잡을 때 방향 유지:
         // 위치(IK) 드래그로 관절이 돌아도 잡은 축 화살표가 같이 돌지 않게(드래그 축은 시작 때 고정) (종원 2026-10-01).
         // 위치 편집도 같은 구조 (종원 2026-10-06) — 드래그 식(월드 목표 → 부모 공간, 부모월드⁻¹·R·부모월드)은 축 방향과 무관
@@ -1558,6 +1589,9 @@ export function holdRootEdit(node: Object3D | undefined) {
  *  XYZ 분해는 가운데 Y 가 ±90° 에 묶여, Y 로 90° 넘게 돌리면 같은 회전이 (180, 180−y, 180) 으로 뒤집혀 보인다(쿼터니언은 연속).
  *  같은 회전의 두 표현 (x, y, z)·(x+π, π−y, z+π) 의 각 성분을 직전 값 ±π 안으로 감고 가까운 쪽을 고른다 */
 export function compatibleEuler(q: Quaternion, prev: Euler | undefined): Euler {
+  // 직전 표시 값이 이미 이 회전이면 그대로 — Y ±90°(짐벌)에선 X·Z 가 같은 축이라 다시 분해하면 넣은 X·Z 가 한쪽으로 몰려
+  // 원점 회전 Y 90 · X 30 · Z 15 를 넣으면 칸이 X 45 · Z 0 으로 바뀌었다 (스튜디오 QA 2026-10-12 hard-global B1)
+  if (prev && Math.abs(_ceQuat.setFromEuler(prev).dot(q)) > 1 - 1e-12) return prev.clone()
   const a = new Euler().setFromQuaternion(q, 'XYZ')
   if (!prev) return a
   const b = new Euler(a.x + Math.PI, Math.PI - a.y, a.z + Math.PI, 'XYZ')

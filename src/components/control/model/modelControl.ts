@@ -47,6 +47,8 @@ export default class ModelControl {
   private rootNode?: Object3D
   /** 위치 편집 대상 (종원 2026-09-15) — 원점/캐릭터. 헬퍼 토글 재생성에도 유지 */
   private positionTarget: SkeletonPositionTarget = 'origin'
+  /** 위치 편집 이동을 화면 위아래(월드 Y)로만 (종원 2026-10-13 제자리 모션). 헬퍼 토글 재생성에도 유지 */
+  private rootMoveYOnly = false
   /** hips 노드 이름 — 위치 편집 캐릭터 오프셋을 굽는 트랙 대상. 헬퍼가 찾은 것을 보관 */
   private hipsName?: string
 
@@ -261,6 +263,7 @@ export default class ModelControl {
     this.skeletonHelper.setGizmoMode(this.skeletonGizmoMode) // 하이라이트보다 먼저 — 선택 관절 기즈모가 모드에 맞게 뜬다
     this.skeletonHelper.setGizmoSpace(this.skeletonGizmoSpace)
     this.skeletonHelper.setPositionTarget(this.positionTarget)
+    this.skeletonHelper.setRootMoveYOnly(this.rootMoveYOnly)
     this.skeletonHelper.setRootEditing(this.rootEditing)
     // 토글 재생성에도 선택 하이라이트 유지 (종원 2026-09-08 릭 선택 연동)
     if (this.skeletonHighlightName) this.skeletonHelper.setHighlightBone(this.skeletonHighlightName)
@@ -289,6 +292,12 @@ export default class ModelControl {
   setSkeletonFootLock(on: boolean) {
     this.skeletonFootLock = on
     this.skeletonHelper?.setFootLock(on)
+  }
+
+  /** 위치 편집 이동 기즈모를 위아래 화살표 하나로 — 원점·캐릭터 둘 다 화면(월드) Y 로만 움직인다 (종원 2026-10-13 제자리 모션) */
+  setSkeletonRootMoveYOnly(on: boolean) {
+    this.rootMoveYOnly = on
+    this.skeletonHelper?.setRootMoveYOnly(on)
   }
 
   /** 현재 선택 본의 IK 루트 후보(직계 부모 → hips 직전, 원 본명) — 조상 선택 UI 용 */
@@ -412,6 +421,11 @@ export default class ModelControl {
     return this.skeletonHelper?.getRootTransform() ?? null
   }
 
+  /** 루트 노드 처음 값 — 스튜디오 원점 좌우 반전 (종원 2026-10-12) */
+  getSkeletonRootOrigin() {
+    return this.skeletonHelper?.getRootOrigin() ?? null
+  }
+
   setSkeletonRootTransform(position: [number, number, number], rotation: [number, number, number]) {
     this.skeletonHelper?.setRootTransform(position, rotation)
   }
@@ -443,6 +457,11 @@ export default class ModelControl {
   /** 드래그 끝 포즈 굳히기 — 이후 솔브 없이 유지, 굳힌 포즈 사본 반환(IK 없으면 null). 기즈모 조작 단계 저장용 (종원 2026-09-14) */
   freezeSkeletonIKPose() {
     return this.skeletonHelper?.freezeIKPose() ?? null
+  }
+
+  /** 편집 세션 원 포즈(IK 를 풀면 돌아갈 포즈) 사본 — 없으면 null (종원 2026-10-12) */
+  getSkeletonIKOriginPose() {
+    return this.skeletonHelper?.getIKOriginPose() ?? null
   }
 
   /** 저장한 단계 포즈로 즉시 복원(다시 풀지 않음, 드래그 타겟은 내려놓음) — 기즈모 되돌리기/다시하기 (종원 2026-09-14) */

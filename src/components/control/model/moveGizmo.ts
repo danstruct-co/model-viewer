@@ -121,6 +121,8 @@ export default class MoveGizmo extends ScreenGizmo {
   private readonly viewCircle: Mesh<TorusGeometry, MeshBasicMaterial>
   private readonly viewOutline: Mesh<TorusGeometry, MeshBasicMaterial>
   private drag?: MoveDrag
+  /** 이 축 화살표만 (흰 원·다른 축 숨김·안 잡힘) — 스튜디오 제자리 모션 중 위치 편집은 위아래만 (종원 2026-10-13) */
+  private onlyAxis: 'x' | 'y' | 'z' | null = null
 
   constructor(renderOrder: number) {
     super(RADIUS_PX)
@@ -148,17 +150,23 @@ export default class MoveGizmo extends ScreenGizmo {
     this.refreshLook()
   }
 
+  setOnlyAxis(axis: 'x' | 'y' | 'z' | null) {
+    if (this.onlyAxis === axis) return
+    this.onlyAxis = axis
+    this.refreshLook()
+  }
+
   /** 호버·드래그 중인 핸들 = 굵고 밝게. 드래그 중엔 잡은 핸들만 보인다(블렌더) */
   protected refreshLook() {
     const hot = this.active ?? this.hover
     AXIS_HANDLES.forEach((handle, i) => {
       const [shaft, cone] = this.arrows[i]
-      shaft.visible = cone.visible = !this.active || this.active === handle
+      shaft.visible = cone.visible = (!this.onlyAxis || this.onlyAxis === handle) && (!this.active || this.active === handle)
       shaft.geometry = hot === handle ? this.shaftHotGeo : this.shaftGeo
       cone.geometry = hot === handle ? this.coneHotGeo : this.coneGeo
       shaft.material.uniforms.color.value.setHex(AXIS_COLORS[i]).lerp(WHITE, hot === handle ? HOT_WHITE_MIX : 0)
     })
-    this.viewCircle.visible = this.viewOutline.visible = !this.active || this.active === 'view'
+    this.viewCircle.visible = this.viewOutline.visible = !this.onlyAxis && (!this.active || this.active === 'view')
     this.viewCircle.geometry = hot === 'view' ? this.viewHotGeo : this.viewGeo
   }
 
@@ -167,10 +175,11 @@ export default class MoveGizmo extends ScreenGizmo {
     const radius = this.frame(camera, viewport)
     toPx(this.center, camera, viewport, _cPx)
     const circleEdge = _p.copy(this.camRight).multiplyScalar(radius * VIEW_CIRCLE_RADIUS).add(this.center)
-    if (pointer.distanceTo(_cPx) <= toPx(circleEdge, camera, viewport, _b).distanceTo(_cPx) + PICK_PX / 2) return 'view'
+    if (!this.onlyAxis && pointer.distanceTo(_cPx) <= toPx(circleEdge, camera, viewport, _b).distanceTo(_cPx) + PICK_PX / 2) return 'view'
     let best: GizmoHandle | null = null
     let bestDist = PICK_PX
     for (let i = 0; i < AXIS_HANDLES.length; i++) {
+      if (this.onlyAxis && this.onlyAxis !== AXIS_HANDLES[i]) continue
       const dir = this.axes[i]
       if (Math.abs(dir.dot(this.toCam)) >= FACING_PICK_MAX) continue
       toPx(_p.copy(dir).multiplyScalar(radius * SHAFT_START).add(this.center), camera, viewport, _a)
