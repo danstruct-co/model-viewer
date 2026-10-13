@@ -47,6 +47,8 @@ export default class ModelControl {
   private rootNode?: Object3D
   /** 위치 편집 대상 (종원 2026-09-15) — 원점/캐릭터. 헬퍼 토글 재생성에도 유지 */
   private positionTarget: SkeletonPositionTarget = 'origin'
+  /** 위치 편집 이동을 위아래(부모 Y)로만 (종원 2026-10-13 제자리 모션). 헬퍼 토글 재생성에도 유지 */
+  private rootMoveYOnly = false
   /** hips 노드 이름 — 위치 편집 캐릭터 오프셋을 굽는 트랙 대상. 헬퍼가 찾은 것을 보관 */
   private hipsName?: string
 
@@ -261,6 +263,7 @@ export default class ModelControl {
     this.skeletonHelper.setGizmoMode(this.skeletonGizmoMode) // 하이라이트보다 먼저 — 선택 관절 기즈모가 모드에 맞게 뜬다
     this.skeletonHelper.setGizmoSpace(this.skeletonGizmoSpace)
     this.skeletonHelper.setPositionTarget(this.positionTarget)
+    this.skeletonHelper.setRootMoveYOnly(this.rootMoveYOnly)
     this.skeletonHelper.setRootEditing(this.rootEditing)
     // 토글 재생성에도 선택 하이라이트 유지 (종원 2026-09-08 릭 선택 연동)
     if (this.skeletonHighlightName) this.skeletonHelper.setHighlightBone(this.skeletonHighlightName)
@@ -289,6 +292,12 @@ export default class ModelControl {
   setSkeletonFootLock(on: boolean) {
     this.skeletonFootLock = on
     this.skeletonHelper?.setFootLock(on)
+  }
+
+  /** 위치 편집 이동 기즈모를 위아래 화살표 하나로 — 원점·캐릭터 둘 다 대상 노드 부모 공간 Y 로만 움직인다 (종원 2026-10-13 제자리 모션) */
+  setSkeletonRootMoveYOnly(on: boolean) {
+    this.rootMoveYOnly = on
+    this.skeletonHelper?.setRootMoveYOnly(on)
   }
 
   /** 현재 선택 본의 IK 루트 후보(직계 부모 → hips 직전, 원 본명) — 조상 선택 UI 용 */
