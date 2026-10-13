@@ -242,7 +242,7 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
   private hipsMarker?: RootMarker
   /** 루트 회전 드래그 — 시작 로컬 회전·부모 월드 회전 */
   private rootDrag?: { local0: Quaternion; parentWorld: Quaternion }
-  /** 위치 편집 이동을 대상 노드 부모 공간 Y 로만 (스튜디오 제자리 모션, 종원 2026-10-13) — 기즈모는 부모 Y 화살표 하나, 끌어도 로컬 X·Z 그대로 */
+  /** 위치 편집 이동을 화면(월드) 위아래로만 (스튜디오 제자리 모션, 종원 2026-10-13) — 기즈모는 월드 Y 화살표 하나, 끌어도 월드 X·Z 그대로 */
   private rootMoveYOnly = false
   private rootMoveStart?: Vector3
   /** 기즈모 모드 (종원 2026-09-14) — rotate 는 IK 를 안 써 주황 체인이 없다. 두 모드의 드래그는 같은 편집 포즈(ikFrozenPose)에 누적 */
@@ -1061,7 +1061,7 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
     const parent = node?.parent
     if (!node || !parent) return false
     if (this.gizmoMode === 'move') {
-      this.rootMoveStart = node.position.clone()
+      this.rootMoveStart = node.getWorldPosition(new Vector3())
       return this.moveGizmo?.beginDrag(handle, raycaster.camera, raycaster.ray, viewport) ?? false
     }
     if (!this.rotateGizmo) return false
@@ -1078,9 +1078,9 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
     if (!node || !parent) return
     if (this.gizmoMode === 'move') {
       if (!this.moveGizmo?.dragTo(raycaster.ray, _moveTarget)) return
+      // 제자리 모션 — 월드 X·Z 는 잡을 때 그대로(축이 월드 Y 라 이론상 그대로지만 부동소수 오차까지 막는다)
+      if (this.rootMoveYOnly && this.rootMoveStart) _moveTarget.setX(this.rootMoveStart.x).setZ(this.rootMoveStart.z)
       node.position.copy(parent.worldToLocal(_moveTarget))
-      // 축이 부모 Y 라 X·Z 는 이론상 그대로지만 부동소수 오차까지 막는다 — 제자리 모션은 X·Z 가 정확히 고정이어야 한다
-      if (this.rootMoveYOnly && this.rootMoveStart) node.position.setX(this.rootMoveStart.x).setZ(this.rootMoveStart.z)
     } else {
       const drag = this.rootDrag
       if (!drag || !this.rotateGizmo) return
@@ -1528,13 +1528,9 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
       // hinge·도달반경 제약으로 관절이 타겟에 못 미치면 기즈모도 그 자리에 멈춘다 (종원 2026-09-10)
       _boneMatrix.multiplyMatrices(_matrixWorldInv, anchor.matrixWorld)
       _vector.setFromMatrixPosition(_boneMatrix)
-      if (this.rootEditing && this.rootMoveYOnly && this.gizmoMode === 'move' && anchor.parent) {
-        // 제자리 모션 — 축 = 대상 노드 부모 공간 축(위로 가는 Y 화살표 하나). 좌표계(월드·로컬)와 무관하게 패널 Y 칸과 같은 방향
-        if (!gizmo.active) {
-          _boneMatrix.multiplyMatrices(_matrixWorldInv, anchor.parent.matrixWorld)
-          gizmo.quaternion.setFromRotationMatrix(_rotMatrix.extractRotation(_boneMatrix))
-        }
-      } else if (this.gizmoSpace === 'local') {
+      // 제자리 모션 — 좌표계(월드·로컬)와 무관하게 월드 정렬(아래 else) = 화면 위아래 Y 화살표 하나. 부모 공간 축을 쓰면 앞이 Z-up 인 뼈대
+      // (Unreal FBX hips 부모)에서 Y 화살표가 카메라 쪽으로 누워 잡히지 않았다 (QA 2026-10-13 C-B5)
+      if (this.gizmoSpace === 'local' && !(this.rootEditing && this.rootMoveYOnly && this.gizmoMode === 'move')) {
         // 로컬 좌표계 — 선택 관절(위치 편집 중엔 대상 노드) 축(헬퍼 좌표계 기준 관절 회전 = 월드에서 관절 회전). 드래그 중엔 잡을 때 방향 유지:
         // 위치(IK) 드래그로 관절이 돌아도 잡은 축 화살표가 같이 돌지 않게(드래그 축은 시작 때 고정) (종원 2026-10-01).
         // 위치 편집도 같은 구조 (종원 2026-10-06) — 드래그 식(월드 목표 → 부모 공간, 부모월드⁻¹·R·부모월드)은 축 방향과 무관

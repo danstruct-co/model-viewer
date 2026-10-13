@@ -47,7 +47,7 @@ export default class ModelControl {
   private rootNode?: Object3D
   /** 위치 편집 대상 (종원 2026-09-15) — 원점/캐릭터. 헬퍼 토글 재생성에도 유지 */
   private positionTarget: SkeletonPositionTarget = 'origin'
-  /** 위치 편집 이동을 위아래(부모 Y)로만 (종원 2026-10-13 제자리 모션). 헬퍼 토글 재생성에도 유지 */
+  /** 위치 편집 이동을 화면 위아래(월드 Y)로만 (종원 2026-10-13 제자리 모션). 헬퍼 토글 재생성에도 유지 */
   private rootMoveYOnly = false
   /** hips 노드 이름 — 위치 편집 캐릭터 오프셋을 굽는 트랙 대상. 헬퍼가 찾은 것을 보관 */
   private hipsName?: string
@@ -294,7 +294,7 @@ export default class ModelControl {
     this.skeletonHelper?.setFootLock(on)
   }
 
-  /** 위치 편집 이동 기즈모를 위아래 화살표 하나로 — 원점·캐릭터 둘 다 대상 노드 부모 공간 Y 로만 움직인다 (종원 2026-10-13 제자리 모션) */
+  /** 위치 편집 이동 기즈모를 위아래 화살표 하나로 — 원점·캐릭터 둘 다 화면(월드) Y 로만 움직인다 (종원 2026-10-13 제자리 모션) */
   setSkeletonRootMoveYOnly(on: boolean) {
     this.rootMoveYOnly = on
     this.skeletonHelper?.setRootMoveYOnly(on)
