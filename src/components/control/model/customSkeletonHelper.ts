@@ -252,7 +252,7 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
   /** 회전 드래그 — 시작 포즈·선택 관절 인덱스·시작 로컬 회전·부모 월드 회전(자기 회전이라 드래그 동안 불변) */
   private rotateDrag?: { base: Float64Array; index: number; local0: Quaternion; parentWorld: Quaternion; lastValid?: Quaternion }
   /** hips 이동 드래그 (종원 2026-09-15) — 시작 포즈·hips 부모(월드 목표 → 로컬 위치). IK 없이 hips 위치만 */
-  private hipsMoveDrag?: { base: Float64Array; parent: Object3D; lastValid?: Float64Array }
+  private hipsMoveDrag?: { base: Float64Array; parent: Object3D; start: Vector3; lastValid?: Float64Array }
   /** 관절 구 표시 상태 — 기즈모는 관절이 보일 때만 (setJointsVisible) */
   private jointsVisible = true
   private hoverIndex: number | null = null
@@ -755,7 +755,7 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
       this.moveGizmo = new MoveGizmo(this.renderOrder + 3) // 관절 구 위
       this.add(this.moveGizmo)
     }
-    this.moveGizmo?.setOnlyAxis(this.rootEditing && this.rootMoveYOnly ? 'y' : null)
+    this.moveGizmo?.setOnlyAxis(this.moveYOnly() ? 'y' : null)
     if (show && this.gizmoMode === 'rotate' && !this.rotateGizmo) {
       this.rotateGizmo = new RotateGizmo(this.renderOrder + 3)
       this.add(this.rotateGizmo)
@@ -907,7 +907,7 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
     if (!parent || !base || !this.moveGizmo?.beginDrag(handle, raycaster.camera, raycaster.ray, viewport)) return false
     this.releaseTargetKeepPose()
     this.captureFootLock()
-    this.hipsMoveDrag = { base, parent }
+    this.hipsMoveDrag = { base, parent, start: this.hipsBone!.getWorldPosition(new Vector3()) }
     return true
   }
 
@@ -919,6 +919,7 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
     if (!this.ikOriginPose) this.ikOriginPose = drag.base.slice()
     const pose = drag.base.slice()
     const at = this.jointBones.length * 4
+    if (this.moveYOnly()) _moveTarget.setX(drag.start.x).setZ(drag.start.z)
     drag.parent.worldToLocal(_moveTarget).toArray(pose, at)
     this.applyPose(pose)
     // 발 고정 중 다리가 더 못 따라오는 자리면 닿는 데까지만 — 마지막으로 닿던 자리와 목표 사이를 반씩 좁혀 경계를 찾는다.
@@ -979,6 +980,13 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
     this.positionTarget = target
     this.syncPositionMarkers()
     this.syncGizmoVisibility()
+  }
+
+  /** 이동이 화면 위아래로만인지 — 제자리 모션 중 위치 편집 대상, 그리고 모션 편집의 hips 이동도. 굽기 맨 끝 제자리가 hips 수평 위치를
+   *  원점에 고정해 hips 를 옆으로 옮긴 편집은 결과에서 지워졌다 — 화면(편집 프레임)엔 옮긴 대로 보여 저장·다운로드와 21cm 달랐다
+   *  (QA 2026-10-13 섞기 C3, 제자리 + 구간 편집 hips 이동) */
+  private moveYOnly() {
+    return this.rootMoveYOnly && (this.rootEditing || this.highlightBone === this.hipsBone)
   }
 
   setRootMoveYOnly(on: boolean) {
@@ -1530,7 +1538,7 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
       _vector.setFromMatrixPosition(_boneMatrix)
       // 제자리 모션 — 좌표계(월드·로컬)와 무관하게 월드 정렬(아래 else) = 화면 위아래 Y 화살표 하나. 부모 공간 축을 쓰면 앞이 Z-up 인 뼈대
       // (Unreal FBX hips 부모)에서 Y 화살표가 카메라 쪽으로 누워 잡히지 않았다 (QA 2026-10-13 C-B5)
-      if (this.gizmoSpace === 'local' && !(this.rootEditing && this.rootMoveYOnly && this.gizmoMode === 'move')) {
+      if (this.gizmoSpace === 'local' && !(this.moveYOnly() && this.gizmoMode === 'move')) {
         // 로컬 좌표계 — 선택 관절(위치 편집 중엔 대상 노드) 축(헬퍼 좌표계 기준 관절 회전 = 월드에서 관절 회전). 드래그 중엔 잡을 때 방향 유지:
         // 위치(IK) 드래그로 관절이 돌아도 잡은 축 화살표가 같이 돌지 않게(드래그 축은 시작 때 고정) (종원 2026-10-01).
         // 위치 편집도 같은 구조 (종원 2026-10-06) — 드래그 식(월드 목표 → 부모 공간, 부모월드⁻¹·R·부모월드)은 축 방향과 무관
