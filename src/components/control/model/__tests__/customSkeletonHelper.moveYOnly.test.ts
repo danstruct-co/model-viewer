@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { Bone, Object3D } from 'three'
+import { Bone, Object3D, PerspectiveCamera, Raycaster, Scene, Vector2, Vector3 } from 'three'
 import CustomSkeletonHelper from '../customSkeletonHelper'
 import MoveGizmo from '../moveGizmo'
 
@@ -20,7 +20,7 @@ function makeHelper() {
   bone('Head', spine, 0.4)
   const helper = new CustomSkeletonHelper(root, { body: ['Hips', 'Spine', 'Head'], hips: 'Hips' })
   helper.setGizmoMode('move')
-  return helper
+  return Object.assign(helper, { testRoot: root })
 }
 
 /** 이동 기즈모에서 보이는 메시 수 — 흰 원 테두리·흰 원 + 축 화살표 3개(몸통·머리) = 8, 위아래만이면 Y 화살표 몸통·머리 2 */
@@ -52,5 +52,34 @@ describe('CustomSkeletonHelper — 제자리 모션 중 이동 기즈모', () =>
     expect(visibleParts(helper)).toBe(2)
     helper.setRootMoveYOnly(false)
     expect(visibleParts(helper)).toBe(8)
+  })
+
+  it('제자리 중 Hips 를 화면 평면(흰 원)으로 비스듬히 끌어도 월드 X·Z 는 잡을 때 그대로, 위아래만 움직인다(dragHipsMove 고정)', () => {
+    const helper = makeHelper()
+    const root = helper.testRoot
+    const scene = new Scene()
+    scene.add(root, helper)
+    helper.setRootMoveYOnly(true)
+    helper.setHighlightBone('Hips')
+    scene.updateMatrixWorld(true)
+    const camera = new PerspectiveCamera(50, 1, 0.1, 100)
+    camera.position.set(0, 1, 5)
+    camera.lookAt(0, 1, 0)
+    camera.updateMatrixWorld()
+    const viewport = new Vector2(800, 800)
+    const ray = (x: number, y: number) => {
+      const rc = new Raycaster()
+      rc.setFromCamera(new Vector2(x, y), camera)
+      return rc
+    }
+    const hips = root.getObjectByName('Hips')!
+    const before = hips.getWorldPosition(new Vector3())
+    // 흰 원 핸들은 제자리 중엔 안 보이지만 끌기 식 자체가 X·Z 를 막는지 — 화면 대각선으로 끈다
+    expect(helper.beginGizmoDrag('view', ray(0, 0), new Vector2(0, 0), viewport)).toBe(true)
+    helper.dragGizmo(ray(0.3, 0.2), new Vector2(0.3, 0.2))
+    const after = hips.getWorldPosition(new Vector3())
+    expect(after.x).toBeCloseTo(before.x, 6)
+    expect(after.z).toBeCloseTo(before.z, 6)
+    expect(Math.abs(after.y - before.y)).toBeGreaterThan(0.05)
   })
 })
