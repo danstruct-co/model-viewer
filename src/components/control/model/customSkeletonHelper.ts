@@ -1203,10 +1203,12 @@ export default class CustomSkeletonHelper extends SkeletonHelper {
   }
 
   /** IK 타겟·편집 세션 해제 — 프레임 이동·적용·재생·편집 종료 시. 원 포즈로 즉시 되돌린다(일시정지 중엔 믹서가 다시 안 써서,
-   *  종원 2026-09-14). 관절 전환은 해제가 아니다 — setHighlightBone 은 포즈를 유지한다 */
+   *  종원 2026-09-14). 관절 전환은 해제가 아니다 — setHighlightBone 은 포즈를 유지한다.
+   *  쉬는 중(suspendIK)이면 되돌리지 않는다 — 쉴 때 이미 원 포즈로 돌렸고 그 뒤 화면은 믹서가 쓴 지금 헤드 프레임 포즈다. 다시 쓰면
+   *  다른 프레임에 전 편집 프레임 포즈가 남았다(카드가 붙은 채 편집 프레임 마름모를 옮기면, QA 2026-11-03) */
   clearTarget() {
     this.cancelGizmoDrag()
-    if (this.ikOriginPose) this.applyPose(this.ikOriginPose)
+    if (this.ikOriginPose && !this.ikSuspended) this.applyPose(this.ikOriginPose)
     this.targetWorld = null
     this.ikOriginPose = undefined
     this.ikBase = undefined
