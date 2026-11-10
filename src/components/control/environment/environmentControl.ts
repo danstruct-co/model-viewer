@@ -102,9 +102,12 @@ export default class EnvironmentControl {
     this.isActiveGrid = false
   }
 
+  // 그림자 판 크기 — 해 그림자 카메라(modelViewer.tsx, 직교 ±25m)를 넉넉히 덮으면 된다(그 밖은 어차피 그림자가 안 생긴다).
+  // 10000(10km)일 땐 카메라 가까이 깊이가 프레임마다 흔들려 판 바로 아래(1cm) 바닥 뒤로 들어갔다 나왔다 해 그림자가 깜빡였다
+  // (스튜디오 촬영 3D 무대, 2026-11-10 — polygonOffset 을 끄거나 당겨도 그대로, 판을 1km 이하로 줄이면 0프레임)
   private addShadow() {
     this.shadow = new Mesh(
-      new PlaneGeometry(10000, 10000),
+      new PlaneGeometry(200, 200),
       new ShadowMaterial({ opacity: 0.5, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 })
     )
     this.shadow.frustumCulled = false
